@@ -75,7 +75,10 @@ class ServerAuthPlugin extends PluginBase implements Listener {
         $pluginManager->registerEvents(new QuitListener($this->authManager), $this);
         $pluginManager->registerEvents(new MoveListener($this->authManager), $this);
         $pluginManager->registerEvents(new InteractListener($this->authManager), $this);
-        $pluginManager->registerEvents(new DamageListener($this->authManager), $this);
+        // DamageListener регистрируется только если событие доступно в данной версии API
+        if (class_exists('pocketmine\event\entity\EntityDamageEvent')) {
+            $pluginManager->registerEvents(new DamageListener($this->authManager), $this);
+        }
         $pluginManager->registerEvents(new CommandListener($this->authManager, $this->configManager), $this);
         $pluginManager->registerEvents(new DropListener($this->authManager), $this);
     }
