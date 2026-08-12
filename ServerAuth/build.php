@@ -1,24 +1,53 @@
 <?php
 
-declare(strict_types=1);
-
 /**
  * Скрипт сборки ServerAuth.phar
- * 
- * Использование: php -dphar.readonly=0 build.php
+ * Использование: php build.php
  */
 
-$phar = new Phar(__DIR__ . '/ServerAuth.phar', 0, 'ServerAuth.phar');
+$pharPath = __DIR__ . "/ServerAuth.phar";
+$sourceDir = __DIR__;
 
-// Добавление файлов из src/
-$phar->buildFromDirectory(__DIR__ . '/src');
+// Удаление старого файла если существует
+if (file_exists($pharPath)) {
+    unlink($pharPath);
+    echo "Старый файл удален\n";
+}
 
-// Добавление ресурсов
-$phar->addFile(__DIR__ . '/plugin.yml');
-$phar->addFile(__DIR__ . '/resources/config.yml');
-$phar->addFile(__DIR__ . '/resources/messages.yml');
+echo "Создание Phar архива...\n";
 
-// Установка точки входа
-$phar->setStub($phar->createDefaultStub('ServerAuth/ServerAuthPlugin.php'));
-
-echo "ServerAuth.phar успешно создан!\n";
+try {
+    $phar = new Phar($pharPath, 0, "ServerAuth.phar");
+    
+    // Добавление метаданных
+    $phar->setMetadata([
+        "name" => "ServerAuth",
+        "version" => "2.0.0",
+        "author" => "ServerAuth Team"
+    ]);
+    
+    // Добавление файлов из src/
+    $phar->buildFromDirectory($sourceDir . "/src", "/\.php$/");
+    echo "Исходный код добавлен\n";
+    
+    // Добавление ресурсов
+    $phar->addFile($sourceDir . "/plugin.yml", "plugin.yml");
+    echo "plugin.yml добавлен\n";
+    
+    $phar->addFile($sourceDir . "/resources/config.yml", "resources/config.yml");
+    echo "config.yml добавлен\n";
+    
+    $phar->addFile($sourceDir . "/resources/messages.yml", "resources/messages.yml");
+    echo "messages.yml добавлен\n";
+    
+    // Установка точки входа
+    $phar->setStub("<?php __HALT_COMPILER();");
+    
+    echo "\n✅ Сборка завершена успешно!\n";
+    echo "Файл: " . $pharPath . "\n";
+    echo "Размер: " . round(filesize($pharPath) / 1024, 2) . " KB\n";
+    
+} catch (Exception $e) {
+    echo "❌ Ошибка при сборке: " . $e->getMessage() . "\n";
+    exit(1);
+}
