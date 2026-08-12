@@ -29,7 +29,7 @@ class ChangePasswordCommand extends Command implements PluginIdentifiableCommand
         $this->messageManager = $messageManager;
     }
     
-    public function execute(CommandSender $sender, string $commandLabel, array $args): bool {
+    public function execute(CommandSender $sender, $commandLabel, array $args): bool {
         if (!$sender instanceof Player) {
             $sender->sendMessage("§cЭта команда доступна только игрокам.");
             return true;

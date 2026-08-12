@@ -95,7 +95,7 @@ class ServerAuthPlugin extends PluginBase implements Listener {
         $this->getLogger()->info("§6ServerAuth §fуспешно выгружен!");
     }
     
-    public function onCommand(CommandSender $sender, Command $command, string $label, array $args): bool {
+    public function onCommand(CommandSender $sender, Command $command, $label, array $args): bool {
         // Обработка команд делегируется Command классам
         return true;
     }

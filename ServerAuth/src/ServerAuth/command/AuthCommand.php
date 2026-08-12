@@ -32,7 +32,7 @@ class AuthCommand extends Command implements PluginIdentifiableCommand {
         $this->configManager = $configManager;
     }
     
-    public function execute(CommandSender $sender, string $commandLabel, array $args): bool {
+    public function execute(CommandSender $sender, $commandLabel, array $args): bool {
         // Проверка прав
         if (!$sender->hasPermission("serverauth.admin")) {
             $this->messageManager->send($sender, "admin.no_permission");
