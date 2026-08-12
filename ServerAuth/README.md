@@ -4,9 +4,9 @@
 Полноценный production-ready плагин для регистрации, авторизации и защиты игроков на серверах Minecraft PE (PocketMine-MP).
 
 ## Требования
-- **PocketMine-MP**: API 3.0.0 - 5.0.0
-- **PHP**: 7.4+
-- **Minecraft PE**: 1.1.5+
+- **PocketMine-MP**: API 3.0.0 - 4.0.0 (MCPE 1.1.5)
+- **PHP**: 7.2+
+- **Minecraft PE**: 1.1.5
 
 ## Установка
 

@@ -1,9 +1,9 @@
 name: ServerAuth
 version: 1.0.0
-api: ["3.0.0", "4.0.0", "5.0.0"]
+api: ["3.0.0", "4.0.0"]
 main: ServerAuth\ServerAuthPlugin
 author: ServerAuth Team
-description: Система регистрации и авторизации для PocketMine-MP
+description: Система регистрации и авторизации для PocketMine-MP (MCPE 1.1.5)
 load: POSTWORLD
 
 permissions:
@@ -19,3 +19,12 @@ permissions:
   serverauth.info:
     description: Просмотр информации об аккаунте игрока
     default: op
+  serverauth.register:
+    description: Регистрация нового аккаунта
+    default: true
+  serverauth.login:
+    description: Вход в аккаунт
+    default: true
+  serverauth.changepassword:
+    description: Смена пароля
+    default: true
