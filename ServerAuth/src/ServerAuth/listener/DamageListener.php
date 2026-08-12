@@ -22,50 +22,41 @@ class DamageListener implements Listener {
     }
     
     /**
-     * Обработка получения урона
+     * Обработка получения и нанесения урона
      */
     public function onEntityDamage(EntityDamageEvent $event): void {
         $entity = $event->getEntity();
         
-        // Проверка, является ли сущность игроком
-        if (!$entity instanceof \pocketmine\Player) {
-            return;
+        // Проверка, является ли сущность игроком (получатель урона)
+        if ($entity instanceof \pocketmine\Player) {
+            // Если игрок авторизован - пропускаем
+            if (!$this->authManager->isLoggedIn($entity)) {
+                $state = $this->authManager->getState($entity);
+                
+                // Блокировка получения урона неавторизованными игроками
+                if ($state === AuthState::UNREGISTERED || $state === AuthState::REGISTERED_NOT_LOGGED) {
+                    $event->setCancelled();
+                    return;
+                }
+            }
         }
         
-        // Если игрок авторизован - пропускаем
-        if ($this->authManager->isLoggedIn($entity)) {
-            return;
-        }
-        
-        $state = $this->authManager->getState($entity);
-        
-        // Блокировка урона для неавторизованных игроков
-        if ($state === AuthState::UNREGISTERED || $state === AuthState::REGISTERED_NOT_LOGGED) {
-            $event->setCancelled();
-        }
-    }
-    
-    /**
-     * Обработка нанесения урона игроком
-     */
-    public function onEntityDamageByEntity(EntityDamageByEntityEvent $event): void {
-        $damager = $event->getDamager();
-        
-        // Проверка, является ли атакующий игроком
-        if (!$damager instanceof \pocketmine\Player) {
-            return;
-        }
-        
-        // Если игрок авторизован - пропускаем
-        if ($this->authManager->isLoggedIn($damager)) {
-            return;
-        }
-        
-        $state = $this->authManager->getState($damager);
-        
-        // Блокировка нанесения урона неавторизованными игроками
-        if ($state === AuthState::UNREGISTERED || $state === AuthState::REGISTERED_NOT_LOGGED) {
-            $event->setCancelled();
+        // Проверка атакующего (если есть)
+        if ($event instanceof EntityDamageByEntityEvent) {
+            $damager = $event->getDamager();
+            
+            // Проверка, является ли атакующий игроком
+            if ($damager instanceof \pocketmine\Player) {
+                // Если игрок авторизован - пропускаем
+                if (!$this->authManager->isLoggedIn($damager)) {
+                    $state = $this->authManager->getState($damager);
+                    
+                    // Блокировка нанесения урона неавторизованными игроками
+                    if ($state === AuthState::UNREGISTERED || $state === AuthState::REGISTERED_NOT_LOGGED) {
+                        $event->setCancelled();
+                    }
+                }
+            }
         }
     }
 }
