@@ -5,125 +5,124 @@ declare(strict_types=1);
 namespace ServerAuth;
 
 use pocketmine\plugin\PluginBase;
-use pocketmine\utils\Config;
 use pocketmine\event\Listener;
-use pocketmine\command\Command;
-use pocketmine\command\CommandSender;
+use pocketmine\utils\Config;
 use pocketmine\Player;
-use pocketmine\Server;
-
+use pocketmine\command\CommandSender;
+use pocketmine\command\Command;
 use ServerAuth\manager\AuthManager;
+use ServerAuth\manager\MessageManager;
 use ServerAuth\storage\StorageManager;
-use ServerAuth\util\ConfigManager;
-use ServerAuth\util\MessageManager;
-use ServerAuth\util\PasswordManager;
-use ServerAuth\listener\AuthListener;
+use ServerAuth\listener\JoinListener;
 use ServerAuth\listener\QuitListener;
 use ServerAuth\listener\MoveListener;
 use ServerAuth\listener\InteractListener;
 use ServerAuth\listener\DamageListener;
-use ServerAuth\listener\CommandListener;
 use ServerAuth\listener\DropListener;
-use ServerAuth\command\RegisterCommand;
-use ServerAuth\command\LoginCommand;
-use ServerAuth\command\ChangePasswordCommand;
-use ServerAuth\command\AuthCommand;
+use ServerAuth\listener\CommandListener;
+use ServerAuth\task\AutoSaveTask;
 
 class ServerAuthPlugin extends PluginBase implements Listener {
     
     private static ?ServerAuthPlugin $instance = null;
-    
     private AuthManager $authManager;
-    private StorageManager $storageManager;
-    private ConfigManager $configManager;
     private MessageManager $messageManager;
-    private PasswordManager $passwordManager;
+    private StorageManager $storageManager;
+    private Config $config;
+    private Config $messagesConfig;
+    
+    public function onLoad(): void {
+        self::$instance = $this;
+        $this->saveResource("config.yml");
+        $this->saveResource("messages.yml");
+    }
     
     public function onEnable(): void {
-        self::$instance = $this;
+        $this->getLogger()->info("§6Загрузка ServerAuth v" . $this->getDescription()->getVersion());
         
-        // Создание директорий
-        @mkdir($this->getDataFolder() . "players");
+        // Загрузка конфигурации
+        $this->config = new Config($this->getDataFolder() . "config.yml", Config::YAML);
+        $this->messagesConfig = new Config($this->getDataFolder() . "messages.yml", Config::YAML);
         
         // Инициализация менеджеров
-        $this->configManager = new ConfigManager($this);
-        $this->messageManager = new MessageManager($this);
-        $this->passwordManager = new PasswordManager();
         $this->storageManager = new StorageManager($this);
+        $this->messageManager = new MessageManager($this, $this->messagesConfig);
+        $this->authManager = new AuthManager($this, $this->storageManager, $this->messageManager);
         
-        $this->authManager = new AuthManager(
-            $this,
-            $this->storageManager,
-            $this->configManager,
-            $this->messageManager,
-            $this->passwordManager
-        );
-        
-        // Регистрация слушателей событий
+        // Регистрация слушателей
         $this->registerListeners();
         
         // Регистрация команд
         $this->registerCommands();
         
-        $this->getLogger()->info("§6ServerAuth §fуспешно загружен!");
+        // Запуск задачи автосохранения
+        $autoSaveInterval = $this->getConfig()->getNested("storage.auto-save-interval", 60);
+        if ($autoSaveInterval > 0) {
+            $this->getScheduler()->scheduleRepeatingTask(new AutoSaveTask($this), $autoSaveInterval * 20);
+        }
+        
+        $this->getLogger()->info("§aServerAuth успешно запущен!");
     }
     
     private function registerListeners(): void {
-        $pluginManager = $this->getServer()->getPluginManager();
-        
-        $pluginManager->registerEvents(new AuthListener($this->authManager, $this->messageManager), $this);
-        $pluginManager->registerEvents(new QuitListener($this->authManager), $this);
-        $pluginManager->registerEvents(new MoveListener($this->authManager), $this);
-        $pluginManager->registerEvents(new InteractListener($this->authManager), $this);
-        // DamageListener - обрабатывает EntityDamageEvent (включая EntityDamageByEntityEvent)
-        if (class_exists('pocketmine\event\entity\EntityDamageEvent')) {
-            $pluginManager->registerEvents(new DamageListener($this->authManager), $this);
-        }
-        $pluginManager->registerEvents(new CommandListener($this->authManager, $this->configManager), $this);
-        $pluginManager->registerEvents(new DropListener($this->authManager), $this);
+        $pm = $this->getServer()->getPluginManager();
+        $pm->registerEvents(new JoinListener($this, $this->authManager, $this->messageManager), $this);
+        $pm->registerEvents(new QuitListener($this, $this->authManager), $this);
+        $pm->registerEvents(new MoveListener($this, $this->authManager, $this->messageManager), $this);
+        $pm->registerEvents(new InteractListener($this, $this->authManager, $this->messageManager), $this);
+        $pm->registerEvents(new DamageListener($this, $this->authManager, $this->messageManager), $this);
+        $pm->registerEvents(new DropListener($this, $this->authManager, $this->messageManager), $this);
+        $pm->registerEvents(new CommandListener($this, $this->authManager, $this->messageManager), $this);
     }
     
     private function registerCommands(): void {
-        $commandMap = $this->getServer()->getCommandMap();
+        // Команды регистрируются через plugin.yml
+    }
+    
+    public function onCommand(CommandSender $sender, Command $command, $label, array $args): bool {
+        $cmdName = strtolower($command->getName());
         
-        $commandMap->register("serverauth", new RegisterCommand($this->authManager, $this->messageManager));
-        $commandMap->register("serverauth", new LoginCommand($this->authManager, $this->messageManager));
-        $commandMap->register("serverauth", new ChangePasswordCommand($this->authManager, $this->messageManager));
-        $commandMap->register("serverauth", new AuthCommand($this->authManager, $this->messageManager, $this->configManager));
+        switch ($cmdName) {
+            case "register":
+                return $this->authManager->handleRegister($sender, $args);
+            case "login":
+                return $this->authManager->handleLogin($sender, $args);
+            case "changepassword":
+                return $this->authManager->handleChangePassword($sender, $args);
+            case "auth":
+                return $this->authManager->handleAdminCommand($sender, $args);
+            default:
+                return false;
+        }
     }
     
     public function onDisable(): void {
         // Сохранение всех данных при выключении
         $this->authManager->saveAllPlayers();
-        $this->getLogger()->info("§6ServerAuth §fуспешно выгружен!");
-    }
-    
-    public function onCommand(CommandSender $sender, Command $command, $label, array $args): bool {
-        // Обработка команд делегируется Command классам
-        return true;
+        $this->getLogger()->info("§eServerAuth выключен. Все данные сохранены.");
     }
     
     public static function getInstance(): ?ServerAuthPlugin {
         return self::$instance;
     }
     
+    public function getConfig(): Config {
+        return $this->config;
+    }
+    
+    public function getMessagesConfig(): Config {
+        return $this->messagesConfig;
+    }
+    
     public function getAuthManager(): AuthManager {
         return $this->authManager;
-    }
-    
-    public function getStorageManager(): StorageManager {
-        return $this->storageManager;
-    }
-    
-    public function getConfigManager(): ConfigManager {
-        return $this->configManager;
     }
     
     public function getMessageManager(): MessageManager {
         return $this->messageManager;
     }
     
-    public function getPasswordManager(): PasswordManager {
-        return $this->passwordManager;
+    public function getStorageManager(): StorageManager {
+        return $this->storageManager;
     }
 }

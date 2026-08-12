@@ -6,36 +6,53 @@ namespace ServerAuth\listener;
 
 use pocketmine\event\Listener;
 use pocketmine\event\player\PlayerDropItemEvent;
+use ServerAuth\ServerAuthPlugin;
 use ServerAuth\manager\AuthManager;
-use ServerAuth\model\AuthState;
+use ServerAuth\manager\MessageManager;
 
-/**
- * Блокировка выброса предметов до авторизации
- */
 class DropListener implements Listener {
     
+    private ServerAuthPlugin $plugin;
     private AuthManager $authManager;
+    private MessageManager $messageManager;
     
-    public function __construct(AuthManager $authManager) {
+    public function __construct(
+        ServerAuthPlugin $plugin,
+        AuthManager $authManager,
+        MessageManager $messageManager
+    ) {
+        $this->plugin = $plugin;
         $this->authManager = $authManager;
+        $this->messageManager = $messageManager;
     }
     
     /**
-     * Обработка выброса предмета
+     * Обработка дропа предметов
      */
     public function onPlayerDropItem(PlayerDropItemEvent $event): void {
         $player = $event->getPlayer();
+        $playerName = $player->getName();
         
-        // Если игрок авторизован - пропускаем
-        if ($this->authManager->isLoggedIn($player)) {
+        // Если игрок авторизован - разрешаем друп
+        if ($this->authManager->isLoggedIn($playerName)) {
             return;
         }
         
-        $state = $this->authManager->getState($player);
+        // Проверка настройки блокировки
+        if (!$this->plugin->getConfig()->getNested("protection.block-drop", true)) {
+            return;
+        }
         
-        // Блокировка выброса предметов для неавторизованных игроков
-        if ($state === AuthState::UNREGISTERED || $state === AuthState::REGISTERED_NOT_LOGGED) {
-            $event->setCancelled();
+        // Отмена события
+        $event->setCancelled();
+        
+        // Отправка сообщения (с кулдауном)
+        static $lastMessageTime = [];
+        $currentTime = microtime(true);
+        
+        if (!isset($lastMessageTime[$playerName]) || ($currentTime - $lastMessageTime[$playerName]) > 2) {
+            $this->messageManager->send($player, "protection.drop-blocked");
+            $lastMessageTime[$playerName] = $currentTime;
         }
     }
 }

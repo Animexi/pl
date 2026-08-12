@@ -5,185 +5,188 @@ declare(strict_types=1);
 namespace ServerAuth\storage;
 
 use ServerAuth\ServerAuthPlugin;
-use ServerAuth\model\PlayerAuthData;
+use pocketmine\utils\Config;
 
-/**
- * Менеджер хранилища данных игроков
- */
 class StorageManager {
     
     private ServerAuthPlugin $plugin;
+    private string $playersFolder;
     
-    /** @var array<string, PlayerAuthData> Кэш загруженных данных */
-    private array $cache = [];
+    /** @var array<string, array> Кэш загруженных данных игроков */
+    private array $playerCache = [];
     
     public function __construct(ServerAuthPlugin $plugin) {
         $this->plugin = $plugin;
+        $this->playersFolder = $plugin->getDataFolder() . 
+            $plugin->getConfig()->getNested("storage.players-folder", "players") . "/";
         
-        // Создание директории для данных
-        @mkdir($plugin->getDataFolder() . "players/");
+        // Создание папки для хранения данных игроков
+        if (!is_dir($this->playersFolder)) {
+            mkdir($this->playersFolder, 0755, true);
+        }
     }
     
     /**
-     * Получить путь к файлу игрока
+     * Проверить существует ли игрок
      */
-    private function getPlayerFile(string $username): string {
-        $cleanName = strtolower(preg_replace('/[^a-zA-Z0-9_]/', '', $username));
-        return $this->plugin->getDataFolder() . "players/" . $cleanName . ".dat";
+    public function playerExists(string $playerName): bool {
+        $filePath = $this->getPlayerFilePath($playerName);
+        return file_exists($filePath);
     }
     
     /**
      * Загрузить данные игрока
+     * @return array|null Данные игрока или null если не найден
      */
-    public function load(string $username): ?PlayerAuthData {
-        $cleanName = strtolower($username);
-        
+    public function loadPlayer(string $playerName): ?array {
         // Проверка кэша
-        if (isset($this->cache[$cleanName])) {
-            return $this->cache[$cleanName];
+        $cacheKey = strtolower($playerName);
+        if (isset($this->playerCache[$cacheKey])) {
+            return $this->playerCache[$cacheKey];
         }
         
-        $file = $this->getPlayerFile($username);
+        $filePath = $this->getPlayerFilePath($playerName);
         
-        if (!file_exists($file)) {
+        if (!file_exists($filePath)) {
             return null;
         }
         
         try {
-            $content = file_get_contents($file);
-            if ($content === false) {
-                $this->plugin->getLogger()->warning("Не удалось прочитать файл игрока: {$username}");
+            $config = new Config($filePath, Config::JSON);
+            $data = $config->getAll();
+            
+            if (empty($data)) {
                 return null;
             }
             
-            $data = json_decode($content, true);
+            // Кэширование
+            $this->playerCache[$cacheKey] = $data;
             
-            if ($data === null || !is_array($data)) {
-                $this->plugin->getLogger()->warning("Повреждённый файл игрока: {$username}");
-                return null;
-            }
-            
-            $authData = PlayerAuthData::fromArray($data);
-            
-            if ($authData !== null) {
-                $this->cache[$cleanName] = $authData;
-            }
-            
-            return $authData;
-            
+            return $data;
         } catch (\Exception $e) {
-            $this->plugin->getLogger()->error("Ошибка загрузки данных игрока {$username}: " . $e->getMessage());
+            $this->plugin->getLogger()->warning("Ошибка загрузки данных игрока {$playerName}: " . $e->getMessage());
             return null;
         }
     }
     
     /**
      * Сохранить данные игрока
+     * @param string $playerName Имя игрока
+     * @param array $data Данные для сохранения
+     * @return bool Успешность сохранения
      */
-    public function save(PlayerAuthData $data): bool {
+    public function savePlayer(string $playerName, array $data): bool {
         try {
-            $file = $this->getPlayerFile($data->getUsername());
-            $jsonData = json_encode($data->toArray(), JSON_PRETTY_PRINT);
+            $filePath = $this->getPlayerFilePath($playerName);
+            $config = new Config($filePath, Config::JSON);
             
-            if ($jsonData === false) {
-                $this->plugin->getLogger()->error("Ошибка сериализации данных игрока: " . $data->getUsername());
-                return false;
-            }
+            $config->setAll($data);
+            $config->save();
             
-            $result = file_put_contents($file, $jsonData);
+            // Обновление кэша
+            $cacheKey = strtolower($playerName);
+            $this->playerCache[$cacheKey] = $data;
             
-            if ($result !== false) {
-                // Обновление кэша
-                $cleanName = strtolower($data->getUsername());
-                $this->cache[$cleanName] = $data;
-                return true;
-            }
-            
-            $this->plugin->getLogger()->error("Не удалось сохранить данные игрока: " . $data->getUsername());
-            return false;
-            
-        } catch (\Exception $e) {
-            $this->plugin->getLogger()->error("Ошибка сохранения данных игрока {$data->getUsername()}: " . $e->getMessage());
-            return false;
-        }
-    }
-    
-    /**
-     * Проверить существование аккаунта
-     */
-    public function exists(string $username): bool {
-        $cleanName = strtolower($username);
-        
-        if (isset($this->cache[$cleanName])) {
             return true;
+        } catch (\Exception $e) {
+            $this->plugin->getLogger()->warning("Ошибка сохранения данных игрока {$playerName}: " . $e->getMessage());
+            return false;
         }
-        
-        return file_exists($this->getPlayerFile($username));
     }
     
     /**
-     * Удалить аккаунт игрока
+     * Удалить данные игрока
+     * @param string $playerName Имя игрока
+     * @return bool Успешность удаления
      */
-    public function delete(string $username): bool {
-        try {
-            $file = $this->getPlayerFile($username);
-            
-            if (file_exists($file)) {
-                $result = unlink($file);
-                
-                if ($result) {
-                    // Удаление из кэша
-                    $cleanName = strtolower($username);
-                    unset($this->cache[$cleanName]);
-                    return true;
-                }
-            }
-            
-            return false;
-            
-        } catch (\Exception $e) {
-            $this->plugin->getLogger()->error("Ошибка удаления аккаунта {$username}: " . $e->getMessage());
+    public function deletePlayer(string $playerName): bool {
+        $filePath = $this->getPlayerFilePath($playerName);
+        
+        if (!file_exists($filePath)) {
             return false;
         }
+        
+        try {
+            unlink($filePath);
+            
+            // Очистка кэша
+            $cacheKey = strtolower($playerName);
+            unset($this->playerCache[$cacheKey]);
+            
+            return true;
+        } catch (\Exception $e) {
+            $this->plugin->getLogger()->warning("Ошибка удаления данных игрока {$playerName}: " . $e->getMessage());
+            return false;
+        }
+    }
+    
+    /**
+     * Получить путь к файлу данных игрока
+     */
+    private function getPlayerFilePath(string $playerName): string {
+        // Использование lowercase имени для совместимости
+        $safeName = strtolower(trim($playerName));
+        $safeName = preg_replace("/[^a-z0-9_-]/", "", $safeName);
+        
+        return $this->playersFolder . $safeName . ".json";
     }
     
     /**
      * Очистить кэш игрока
      */
-    public function clearCache(string $username): void {
-        $cleanName = strtolower($username);
-        unset($this->cache[$cleanName]);
+    public function clearCache(string $playerName): void {
+        $cacheKey = strtolower($playerName);
+        unset($this->playerCache[$cacheKey]);
     }
     
     /**
      * Очистить весь кэш
      */
     public function clearAllCache(): void {
-        $this->cache = [];
+        $this->playerCache = [];
     }
     
     /**
-     * Получить все аккаунты
-     * 
-     * @return array<string> Список имён игроков
+     * Сохранить всех игроков из кэша
      */
-    public function getAllAccounts(): array {
-        $accounts = [];
-        $dir = $this->plugin->getDataFolder() . "players/";
+    public function saveAllFromCache(): void {
+        foreach ($this->playerCache as $playerName => $data) {
+            $this->savePlayer($playerName, $data);
+        }
+    }
+    
+    /**
+     * Получить список всех зарегистрированных игроков
+     * @return array<string> Список имен игроков
+     */
+    public function getAllPlayers(): array {
+        $players = [];
         
-        if (is_dir($dir)) {
-            $files = scandir($dir);
+        if (!is_dir($this->playersFolder)) {
+            return $players;
+        }
+        
+        $files = scandir($this->playersFolder);
+        
+        foreach ($files as $file) {
+            if ($file === "." || $file === "..") {
+                continue;
+            }
             
-            if ($files !== false) {
-                foreach ($files as $file) {
-                    if (str_ends_with($file, '.dat')) {
-                        $name = substr($file, 0, -4);
-                        $accounts[] = $name;
-                    }
-                }
+            $extension = pathinfo($file, PATHINFO_EXTENSION);
+            if ($extension === "json") {
+                $playerName = pathinfo($file, PATHINFO_FILENAME);
+                $players[] = $playerName;
             }
         }
         
-        return $accounts;
+        return $players;
+    }
+    
+    /**
+     * Получить количество зарегистрированных игроков
+     */
+    public function getRegisteredCount(): int {
+        return count($this->getAllPlayers());
     }
 }

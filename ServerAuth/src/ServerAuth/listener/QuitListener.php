@@ -6,26 +6,34 @@ namespace ServerAuth\listener;
 
 use pocketmine\event\Listener;
 use pocketmine\event\player\PlayerQuitEvent;
+use ServerAuth\ServerAuthPlugin;
 use ServerAuth\manager\AuthManager;
 
-/**
- * Слушатель событий выхода игроков
- */
 class QuitListener implements Listener {
     
+    private ServerAuthPlugin $plugin;
     private AuthManager $authManager;
     
-    public function __construct(AuthManager $authManager) {
+    public function __construct(
+        ServerAuthPlugin $plugin,
+        AuthManager $authManager
+    ) {
+        $this->plugin = $plugin;
         $this->authManager = $authManager;
     }
     
-    /**
-     * Обработка выхода игрока
-     */
     public function onPlayerQuit(PlayerQuitEvent $event): void {
         $player = $event->getPlayer();
+        $playerName = $player->getName();
         
-        // Автоматический logout и очистка состояния
-        $this->authManager->onPlayerQuit($player);
+        // Очистка данных игрока при выходе
+        $this->authManager->clearPlayerData($playerName);
+        
+        // Сохранение данных игрока перед выходом
+        $playerData = $this->plugin->getStorageManager()->loadPlayer($playerName);
+        if ($playerData !== null) {
+            $playerData["last_login"] = time();
+            $this->plugin->getStorageManager()->savePlayer($playerName, $playerData);
+        }
     }
 }
