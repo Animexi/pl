@@ -27,7 +27,7 @@ class JoinListener implements Listener {
     }
     
     /**
-     * @priority HIGHEST - обрабатываем последним чтобы убедиться что все данные загружены
+     * @priority HIGHEST
      */
     public function onPlayerJoin(PlayerJoinEvent $event): void {
         $player = $event->getPlayer();
