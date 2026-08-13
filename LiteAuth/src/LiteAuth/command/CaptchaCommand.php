@@ -6,15 +6,15 @@ use pocketmine\command\Command;
 use pocketmine\command\CommandSender;
 use pocketmine\Player;
 use pocketmine\command\PluginIdentifiableCommand;
-use pocketmine\plugin\Plugin;
 
 use LiteAuth\manager\AuthManager;
 use LiteAuth\util\MessageManager;
+use LiteAuth\util\ConfigManager;
 
 /**
- * Команда /register
+ * Команда /captcha
  */
-class RegisterCommand extends Command implements PluginIdentifiableCommand {
+class CaptchaCommand extends Command implements PluginIdentifiableCommand {
     
     /** @var AuthManager */
     private $authManager;
@@ -22,12 +22,16 @@ class RegisterCommand extends Command implements PluginIdentifiableCommand {
     /** @var MessageManager */
     private $messageManager;
     
-    public function __construct(AuthManager $authManager, MessageManager $messageManager) {
-        parent::__construct("register", "Регистрация нового аккаунта", "/register <пароль> <пароль>", array("reg"));
-        $this->setPermission("liteauth.register");
+    /** @var ConfigManager */
+    private $configManager;
+    
+    public function __construct(AuthManager $authManager, MessageManager $messageManager, ConfigManager $configManager) {
+        parent::__construct("captcha", "Подтверждение капчи", "/captcha <ответ>", array());
+        $this->setPermission("liteauth.captcha");
         
         $this->authManager = $authManager;
         $this->messageManager = $messageManager;
+        $this->configManager = $configManager;
     }
     
     public function execute(CommandSender $sender, string $commandLabel, array $args) : bool {
@@ -36,17 +40,16 @@ class RegisterCommand extends Command implements PluginIdentifiableCommand {
             return true;
         }
         
-        // Проверка количества аргументов
-        if (count($args) < 2) {
-            $this->messageManager->send($sender, "register.usage");
+        // Если нет аргументов - показать новую капчу
+        if (count($args) < 1) {
+            $this->authManager->showCaptcha($sender);
             return true;
         }
         
-        $password = $args[0];
-        $confirmPassword = $args[1];
+        $answer = intval($args[0]);
         
-        // Регистрация
-        $this->authManager->register($sender, $password, $confirmPassword);
+        // Проверка капчи
+        $this->authManager->checkCaptcha($sender, $answer);
         
         return true;
     }

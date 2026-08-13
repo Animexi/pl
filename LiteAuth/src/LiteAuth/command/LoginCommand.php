@@ -12,9 +12,9 @@ use LiteAuth\manager\AuthManager;
 use LiteAuth\util\MessageManager;
 
 /**
- * Команда /register
+ * Команда /login
  */
-class RegisterCommand extends Command implements PluginIdentifiableCommand {
+class LoginCommand extends Command implements PluginIdentifiableCommand {
     
     /** @var AuthManager */
     private $authManager;
@@ -23,8 +23,8 @@ class RegisterCommand extends Command implements PluginIdentifiableCommand {
     private $messageManager;
     
     public function __construct(AuthManager $authManager, MessageManager $messageManager) {
-        parent::__construct("register", "Регистрация нового аккаунта", "/register <пароль> <пароль>", array("reg"));
-        $this->setPermission("liteauth.register");
+        parent::__construct("login", "Авторизация на сервере", "/login <пароль>", array("l"));
+        $this->setPermission("liteauth.login");
         
         $this->authManager = $authManager;
         $this->messageManager = $messageManager;
@@ -37,16 +37,15 @@ class RegisterCommand extends Command implements PluginIdentifiableCommand {
         }
         
         // Проверка количества аргументов
-        if (count($args) < 2) {
-            $this->messageManager->send($sender, "register.usage");
+        if (count($args) < 1) {
+            $this->messageManager->send($sender, "login.usage");
             return true;
         }
         
-        $password = $args[0];
-        $confirmPassword = $args[1];
+        $password = implode(" ", $args);
         
-        // Регистрация
-        $this->authManager->register($sender, $password, $confirmPassword);
+        // Авторизация
+        $this->authManager->login($sender, $password);
         
         return true;
     }

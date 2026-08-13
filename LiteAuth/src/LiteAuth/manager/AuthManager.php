@@ -3,6 +3,7 @@
 namespace LiteAuth\manager;
 
 use pocketmine\Player;
+use pocketmine\command\CommandSender;
 use LiteAuth\LiteAuthPlugin;
 use LiteAuth\model\AuthState;
 use LiteAuth\model\PlayerAuthData;
@@ -45,6 +46,9 @@ class AuthManager {
     
     /** @var array Состояния игроков по имени (для совместимости) */
     private $playerStatesByName = array();
+    
+    /** @var array Данные сессий игроков */
+    private $sessionData = array();
     
     public function __construct(
         LiteAuthPlugin $plugin,
@@ -878,5 +882,175 @@ class AuthManager {
      */
     private function logError($message) {
         $this->plugin->getLogger()->error($message);
+    }
+    
+    /**
+     * Показать статус авторизации текущего игрока
+     */
+    public function showAuthStatus(Player $player) {
+        $playerName = $player->getName();
+        $isRegistered = $this->isRegistered($playerName);
+        $isAuthenticated = $this->isAuthenticated($playerName);
+        $hasSession = $this->hasValidSession($player);
+        
+        $this->messageManager->sendBoxedMessage(
+            $player,
+            "§e§lLITEAUTH",
+            [
+                "§7Аккаунт: §f" . ($isRegistered ? "Зарегистрирован" : "Не зарегистрирован"),
+                "§7Сессия: §f" . ($hasSession ? "Активна" : "Отсутствует"),
+                "§7Авторизация: §f" . ($isAuthenticated ? "Выполнена" : "Требуется"),
+                "§7Авто-логин: §f" . ($this->configManager->isAutoLoginEnabled() ? "Включен" : "Отключен")
+            ]
+        );
+    }
+    
+    /**
+     * Показать информацию об игроке (админ)
+     */
+    public function showPlayerInfo(CommandSender $sender, $targetName) {
+        $normalizedName = strtolower($targetName);
+        $authData = $this->storageManager->loadPlayerData($normalizedName);
+        
+        if ($authData === null) {
+            $sender->sendMessage("§e§lLITE§f§lAUTH §8┃ §cИгрок §f{$targetName} §cне зарегистрирован.");
+            return;
+        }
+        
+        $isOnline = $this->plugin->getServer()->getPlayer($targetName) !== null;
+        $isAuthenticated = $this->isAuthenticated($targetName);
+        
+        $sender->sendMessage("§e§lLITE§f§lAUTH §8┃ §fИнформация об игроке §e{$targetName}§f:");
+        $sender->sendMessage("  §7Зарегистрирован: §aДа");
+        $sender->sendMessage("  §7Онлайн: §f" . ($isOnline ? "§aДа" : "§cНет"));
+        $sender->sendMessage("  §7Авторизован: §f" . ($isAuthenticated ? "§aДа" : "§cНет"));
+        $sender->sendMessage("  §7Дата регистрации: §f" . date("Y-m-d H:i:s", $authData->getRegistrationDate()));
+        $sender->sendMessage("  §7Последний вход: §f" . ($authData->getLastLogin() > 0 ? date("Y-m-d H:i:s", $authData->getLastLogin()) : "Никогда"));
+        $sender->sendMessage("  §7Неудачные попытки: §f{$authData->getFailedAttempts()}");
+        $sender->sendMessage("  §7Заблокирован: §f" . ($authData->isLocked() ? "§cДа" : "§aНет"));
+    }
+    
+    /**
+     * Удалить аккаунт игрока (админ)
+     */
+    public function unregisterPlayer(CommandSender $sender, $targetName) {
+        $normalizedName = strtolower($targetName);
+        
+        if (!$this->storageManager->playerExists($normalizedName)) {
+            $sender->sendMessage("§e§lLITE§f§lAUTH §8┃ §cИгрок §f{$targetName} §cне зарегистрирован.");
+            return;
+        }
+        
+        $this->storageManager->deletePlayer($normalizedName);
+        
+        // Сброс состояния если игрок онлайн
+        $target = $this->plugin->getServer()->getPlayer($targetName);
+        if ($target !== null) {
+            $this->clearPlayerData($target);
+            $this->initializePlayer($target);
+        }
+        
+        $sender->sendMessage("§e§lLITE§f§lAUTH §8┃ §aАккаунт игрока §f{$targetName} §aудалён.");
+        $this->logInfo("[ADMIN] {$sender->getName()} удалил аккаунт игрока {$targetName}");
+    }
+    
+    /**
+     * Изменить пароль игрока (админ)
+     */
+    public function changePassword(CommandSender $sender, $targetName, $newPassword) {
+        $normalizedName = strtolower($targetName);
+        
+        if (!$this->storageManager->playerExists($normalizedName)) {
+            $sender->sendMessage("§e§lLITE§f§lAUTH §8┃ §cИгрок §f{$targetName} §cне зарегистрирован.");
+            return;
+        }
+        
+        $hashedPassword = $this->passwordManager->hashPassword($newPassword);
+        $this->storageManager->updatePlayerPassword($normalizedName, $hashedPassword);
+        
+        // Сброс сессий игрока
+        $target = $this->plugin->getServer()->getPlayer($targetName);
+        if ($target !== null) {
+            $this->clearSession($target);
+            $this->setState($target, AuthState::AUTH_REQUIRED);
+        }
+        
+        $sender->sendMessage("§e§lLITE§f§lAUTH §8┃ §aПароль игрока §f{$targetName} §aизменён.");
+        $this->logInfo("[ADMIN] {$sender->getName()} изменил пароль игрока {$targetName}");
+    }
+    
+    /**
+     * Выйти из аккаунта игрока (админ)
+     */
+    public function logoutPlayer(CommandSender $sender, $targetName) {
+        $target = $this->plugin->getServer()->getPlayer($targetName);
+        
+        if ($target === null) {
+            $sender->sendMessage("§e§lLITE§f§lAUTH §8┃ §cИгрок §f{$targetName} §cне найден.");
+            return;
+        }
+        
+        $this->setState($target, AuthState::AUTH_REQUIRED);
+        $this->clearSession($target);
+        
+        $sender->sendMessage("§e§lLITE§f§lAUTH §8┃ §aИгрок §f{$targetName} §aвышел из аккаунта.");
+        $target->sendMessage("§e§lLITE§f§lAUTH §8┃ §cАдминистратор завершил вашу сессию. Войдите снова.");
+        $this->logInfo("[ADMIN] {$sender->getName()} выполнил logout для игрока {$targetName}");
+    }
+    
+    /**
+     * Перезагрузить конфигурацию (админ)
+     */
+    public function reloadConfig(CommandSender $sender) {
+        try {
+            $this->configManager->reload();
+            $this->messageManager->reload();
+            $sender->sendMessage("§e§lLITE§f§lAUTH §8┃ §aКонфигурация успешно перезагружена.");
+            $this->logInfo("[ADMIN] {$sender->getName()} перезагрузил конфигурацию");
+        } catch (\Exception $e) {
+            $sender->sendMessage("§e§lLITE§f§lAUTH §8┃ §cНе удалось загрузить конфигурацию.");
+            $this->logError("[RELOAD] Ошибка при перезагрузке: " . $e->getMessage());
+        }
+    }
+    
+    /**
+     * Принудительно показать капчу игроку (админ)
+     */
+    public function forceCaptcha(CommandSender $sender, $targetName) {
+        $target = $this->plugin->getServer()->getPlayer($targetName);
+        
+        if ($target === null) {
+            $sender->sendMessage("§e§lLITE§f§lAUTH §8┃ §cИгрок §f{$targetName} §cне найден.");
+            return;
+        }
+        
+        $this->generateCaptcha($target);
+        $this->showCaptcha($target);
+        
+        $sender->sendMessage("§e§lLITE§f§lAUTH §8┃ §aКапча показана игроку §f{$targetName}§a.");
+        $this->logInfo("[ADMIN] {$sender->getName()} показал капчу игроку {$targetName}");
+    }
+    
+    /**
+     * Показать информацию о сессии игрока (админ)
+     */
+    public function showSessionInfo(CommandSender $sender, $targetName) {
+        $target = $this->plugin->getServer()->getPlayer($targetName);
+        
+        if ($target === null) {
+            $sender->sendMessage("§e§lLITE§f§lAUTH §8┃ §cИгрок §f{$targetName} §cне найден.");
+            return;
+        }
+        
+        $uuid = $this->getPlayerUUID($target);
+        $sessionTime = isset($this->sessionData[$uuid]) ? $this->sessionData[$uuid]["time"] : 0;
+        $sessionIp = isset($this->sessionData[$uuid]) ? $this->sessionData[$uuid]["ip"] : "Нет данных";
+        $isValid = $this->hasValidSession($target);
+        
+        $sender->sendMessage("§e§lLITE§f§lAUTH §8┃ §fИнформация о сессии §e{$targetName}§f:");
+        $sender->sendMessage("  §7Активна: §f" . ($isValid ? "§aДа" : "§cНет"));
+        $sender->sendMessage("  §7Время создания: §f" . ($sessionTime > 0 ? date("Y-m-d H:i:s", $sessionTime) : "Нет данных"));
+        $sender->sendMessage("  §7IP сессии: §f{$sessionIp}");
+        $sender->sendMessage("  §7Требование IP: §f" . ($this->configManager->isSessionByIpEnabled() ? "Да" : "Нет"));
     }
 }
