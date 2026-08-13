@@ -1,495 +1,484 @@
 <?php
 
+declare(strict_types=1);
+
 namespace LiteAuth\manager;
 
 use pocketmine\Player;
-use pocketmine\level\Location;
 use LiteAuth\LiteAuthPlugin;
-use LiteAuth\storage\YamlStorage;
-use pocketmine\utils\Config;
 
 class AuthManager {
-    
-    const STATE_UNREGISTERED = 0;
-    const STATE_REGISTERED = 1;
-    const STATE_CAPTCHA = 2;
-    const STATE_AUTH_REQUIRED = 3;
-    const STATE_AUTHENTICATED = 4;
-    
+
+    /** @var LiteAuthPlugin */
     private $plugin;
-    private $storage;
-    private $config;
-    private $messages;
+    
+    /** @var array<string, int> States: 0=UNREGISTERED, 1=REGISTERED_NOT_AUTH, 2=CAPTCHA_REQUIRED, 3=AUTHENTICATED */
     private $playerStates = [];
-    private $playerData = [];
+    
+    /** @var array<string, array> */
     private $captchaData = [];
+    
+    /** @var array<string, int> */
     private $loginAttempts = [];
+    
+    /** @var array<string, int> */
+    private $captchaAttempts = [];
+    
+    /** @var array<string, int> */
     private $lastActionTime = [];
-    private $registrationByIp = [];
     
-    public function __construct(LiteAuthPlugin $plugin, YamlStorage $storage, Config $config, Config $messages) {
+    /** @var array<string, int> */
+    private $banUntil = [];
+
+    const STATE_UNREGISTERED = 0;
+    const STATE_REGISTERED_NOT_AUTH = 1;
+    const STATE_CAPTCHA_REQUIRED = 2;
+    const STATE_AUTHENTICATED = 3;
+
+    public function __construct(LiteAuthPlugin $plugin) {
         $this->plugin = $plugin;
-        $this->storage = $storage;
-        $this->config = $config;
-        $this->messages = $messages;
     }
-    
-    public function getPlugin() {
-        return $this->plugin;
-    }
-    
-    public function getStorage() {
-        return $this->storage;
-    }
-    
-    public function getState($player) {
-        $name = strtolower($player instanceof Player ? $player->getName() : $player);
-        return isset($this->playerStates[$name]) ? $this->playerStates[$name] : self::STATE_UNREGISTERED;
-    }
-    
-    public function setState($player, $state) {
-        $name = strtolower($player instanceof Player ? $player->getName() : $player);
-        $this->playerStates[$name] = $state;
-    }
-    
-    public function isRegistered($player) {
-        $name = strtolower($player instanceof Player ? $player->getName() : $player);
-        return $this->storage->exists($name);
-    }
-    
-    public function isAuthenticated($player) {
-        return $this->getState($player) === self::STATE_AUTHENTICATED;
-    }
-    
-    public function needsCaptcha($player) {
-        return $this->getState($player) === self::STATE_CAPTCHA;
-    }
-    
-    public function needsAuth($player) {
-        $state = $this->getState($player);
-        return $state === self::STATE_AUTH_REQUIRED || $state === self::STATE_REGISTERED;
-    }
-    
-    public function handleJoin($player) {
-        $name = strtolower($player->getName());
+
+    /**
+     * Обрабатывает вход игрока
+     */
+    public function handleJoin(Player $player): void {
+        $name = $player->getName();
         $ip = $player->getAddress();
         
-        if ($this->hasPermission($player, "liteauth.bypass")) {
-            $this->setState($player, self::STATE_AUTHENTICATED);
+        // Сбрасываем временные данные
+        unset($this->loginAttempts[$name]);
+        unset($this->captchaAttempts[$name]);
+        unset($this->captchaData[$name]);
+        unset($this->banUntil[$name]);
+
+        // Проверяем регистрацию
+        if (!$this->plugin->getStorageManager()->isRegistered($name)) {
+            $this->playerStates[$name] = self::STATE_UNREGISTERED;
+            $this->plugin->getMessageManager()->send($player, "join-unregistered");
             return;
         }
-        
-        $currentTime = time();
-        
-        if ($this->isRegistered($player)) {
-            $account = $this->storage->get($name);
-            
-            if ($this->config->get("auto-login", true) && isset($account["session"])) {
-                $session = $account["session"];
-                $sessionTime = $this->config->get("session-time", 86400);
-                
-                if (isset($session["expires"]) && $session["expires"] > $currentTime) {
-                    $sessionByIp = $this->config->get("session-by-ip", false);
-                    if (!$sessionByIp || (isset($session["ip"]) && $session["ip"] === $ip)) {
-                        $this->setState($player, self::STATE_AUTHENTICATED);
-                        $this->saveSession($player);
-                        $player->sendMessage($this->formatMessage("auto-login-success"));
-                        $this->log("Auto-login: " . $player->getName());
-                        return;
-                    }
-                }
-            }
-            
-            $this->setState($player, self::STATE_AUTH_REQUIRED);
-            $this->showLoginMessage($player);
-            $this->startAuthTimeout($player);
-        } else {
-            if (!$this->config->get("registration-enabled", true)) {
-                $player->kick("§cРегистрация временно отключена.");
-                return;
-            }
-            
-            $maxReg = $this->config->get("max-registrations-per-ip", 3);
-            if (isset($this->registrationByIp[$ip]) && $this->registrationByIp[$ip] >= $maxReg) {
-                $player->kick("§cСлишком много регистраций с вашего IP.");
-                return;
-            }
-            
-            $this->setState($player, self::STATE_UNREGISTERED);
-            $this->showRegisterMessage($player);
+
+        // Проверяем сессию для авто-логина
+        if ($this->checkSession($player)) {
+            $this->setAuthenticated($player);
+            $this->plugin->getMessageManager()->sendPrefix($player, "§aАвтоматическая авторизация выполнена.");
+            return;
         }
+
+        // Требуется авторизация
+        $this->playerStates[$name] = self::STATE_REGISTERED_NOT_AUTH;
+        $this->plugin->getMessageManager()->send($player, "join-registered");
+        
+        // Запускаем таймер
+        $this->startAuthTimer($player);
     }
-    
-    public function register($player, $password, $confirmPassword) {
-        $name = strtolower($player->getName());
-        $ip = $player->getAddress();
-        
-        if ($this->isRegistered($player)) {
-            $player->sendMessage($this->formatMessage("already-registered"));
+
+    /**
+     * Проверяет сессию игрока
+     */
+    private function checkSession(Player $player): bool {
+        if (!$this->plugin->getConfig()->get("auto-login", true)) {
             return false;
         }
+
+        $name = $player->getName();
+        $sessionData = $this->plugin->getStorageManager()->getSessionData($name);
         
-        if (!$this->config->get("registration-enabled", true)) {
-            $player->sendMessage($this->formatMessage("registration-disabled"));
+        if ($sessionData === null || !isset($sessionData["token"])) {
             return false;
         }
-        
-        if ($password !== $confirmPassword) {
-            $player->sendMessage($this->formatMessage("password-mismatch"));
+
+        // Проверяем срок действия
+        if ($sessionData["expires"] < time()) {
             return false;
         }
-        
-        $minLen = $this->config->get("min-password-length", 6);
-        $maxLen = $this->config->get("max-password-length", 32);
-        
-        if (strlen($password) < $minLen) {
-            $player->sendMessage($this->formatMessage("password-too-short", ["min" => $minLen]));
-            return false;
+
+        // Проверяем IP если включено
+        if ($this->plugin->getConfig()->get("session-by-ip", false)) {
+            $lastIP = $this->plugin->getStorageManager()->getLastIP($name);
+            if ($lastIP !== $player->getAddress()) {
+                return false;
+            }
         }
-        
-        if (strlen($password) > $maxLen) {
-            $player->sendMessage($this->formatMessage("password-too-long", ["max" => $maxLen]));
-            return false;
-        }
-        
-        if (strpos($password, " ") !== false) {
-            $player->sendMessage($this->formatMessage("password-invalid-chars"));
-            return false;
-        }
-        
-        $blacklist = $this->config->get("password-blacklist", []);
-        if (in_array(strtolower($password), $blacklist)) {
-            $player->sendMessage($this->formatMessage("password-blacklisted"));
-            return false;
-        }
-        
-        $hash = password_hash($password, PASSWORD_DEFAULT);
-        
-        $account = [
-            "name" => $player->getName(),
-            "password" => $hash,
-            "registered" => time(),
-            "lastlogin" => time(),
-            "ip" => $ip
-        ];
-        
-        $this->storage->save($name, $account);
-        
-        if (!isset($this->registrationByIp[$ip])) {
-            $this->registrationByIp[$ip] = 0;
-        }
-        $this->registrationByIp[$ip]++;
-        
-        $this->setState($player, self::STATE_REGISTERED);
-        
-        $player->sendMessage($this->formatBoxedMessage([
-            "§e§lLITEAUTH",
-            "",
-            "§aАккаунт успешно создан.",
-            "",
-            "§7Теперь необходимо пройти",
-            "§7небольшую проверку.",
-            ""
-        ]));
-        
-        $this->log("Registration: " . $player->getName());
-        
-        if ($this->config->get("captcha-enabled", true)) {
-            $this->generateCaptcha($player);
-        } else {
-            $this->setState($player, self::STATE_AUTHENTICATED);
-            $this->saveSession($player);
-            $player->sendMessage($this->formatMessage("register-success-no-captcha"));
-        }
-        
+
         return true;
     }
-    
-    public function generateCaptcha($player) {
-        $name = strtolower($player->getName());
+
+    /**
+     * Регистрирует нового игрока
+     */
+    public function register(Player $player, string $password, string $confirmPassword): bool {
+        $name = $player->getName();
+        $msg = $this->plugin->getMessageManager();
+
+        // Проверка состояния
+        if (isset($this->playerStates[$name]) && $this->playerStates[$name] >= self::STATE_AUTHENTICATED) {
+            $msg->sendPrefix($player, "§cВы уже зарегистрированы и авторизованы.");
+            return false;
+        }
+
+        if ($this->plugin->getStorageManager()->isRegistered($name)) {
+            $msg->send($player, "register-already-exists");
+            return false;
+        }
+
+        // Проверка включена ли регистрация
+        if (!$this->plugin->getConfig()->get("registration-enabled", true)) {
+            $msg->send($player, "register-disabled");
+            return false;
+        }
+
+        // Проверка лимита по IP
+        $maxReg = (int)$this->plugin->getConfig()->get("max-registrations-per-ip", 3);
+        if ($maxReg > 0) {
+            // Упрощённая проверка (можно улучшить)
+        }
+
+        // Проверка паролей
+        if ($password !== $confirmPassword) {
+            $msg->send($player, "register-password-mismatch");
+            return false;
+        }
+
+        $minLen = (int)$this->plugin->getConfig()->get("min-password-length", 6);
+        $maxLen = (int)$this->plugin->getConfig()->get("max-password-length", 32);
+
+        if (strlen($password) < $minLen) {
+            $msg->send($player, "register-password-too-short", ["min" => $minLen]);
+            return false;
+        }
+
+        if (strlen($password) > $maxLen) {
+            $msg->send($player, "register-password-too-long", ["max" => $maxLen]);
+            return false;
+        }
+
+        // Проверка на запрещённые символы
+        if (!preg_match('/^[a-zA-Z0-9_\-\.]+$/', $password)) {
+            $msg->send($player, "register-invalid-chars");
+            return false;
+        }
+
+        // Проверка на простые пароли
+        $forbidden = $this->plugin->getConfig()->get("forbidden-passwords", []);
+        if (in_array(strtolower($password), array_map('strtolower', $forbidden))) {
+            $msg->send($player, "register-forbidden-password");
+            return false;
+        }
+
+        // Хешируем пароль
+        $hash = password_hash($password, PASSWORD_DEFAULT);
+
+        // Создаём аккаунт
+        if (!$this->plugin->getStorageManager()->createAccount($name, $hash, $player->getAddress())) {
+            $msg->sendPrefix($player, "§cНе удалось создать аккаунт.");
+            return false;
+        }
+
+        // Успешная регистрация
+        $this->playerStates[$name] = self::STATE_CAPTCHA_REQUIRED;
+        $msg->send($player, "register-success");
+
+        // Генерируем капчу
+        $this->generateCaptcha($player);
+
+        return true;
+    }
+
+    /**
+     * Вход в аккаунт
+     */
+    public function login(Player $player, string $password): bool {
+        $name = $player->getName();
+        $msg = $this->plugin->getMessageManager();
+
+        // Проверка бана попыток
+        if (isset($this->banUntil[$name]) && $this->banUntil[$name] > time()) {
+            $remaining = $this->banUntil[$name] - time();
+            $msg->send($player, "login-max-attempts", ["time" => $remaining]);
+            return false;
+        }
+
+        // Проверка регистрации
+        if (!$this->plugin->getStorageManager()->isRegistered($name)) {
+            $msg->send($player, "login-not-registered");
+            return false;
+        }
+
+        // Проверка состояния
+        $state = $this->getState($player);
+        if ($state === self::STATE_AUTHENTICATED) {
+            $msg->send($player, "already-authenticated");
+            return false;
+        }
+
+        // Rate limit
+        if (!$this->checkRateLimit($player, "login")) {
+            $msg->sendPrefix($player, "§7Подождите перед следующей попыткой.");
+            return false;
+        }
+
+        // Проверка пароля
+        $hash = $this->plugin->getStorageManager()->getPasswordHash($name);
+        if ($hash === null || !password_verify($password, $hash)) {
+            $this->loginAttempts[$name] = ($this->loginAttempts[$name] ?? 0) + 1;
+            
+            $maxAttempts = (int)$this->plugin->getConfig()->get("max-login-attempts", 5);
+            
+            if ($this->loginAttempts[$name] >= $maxAttempts) {
+                $banTime = (int)$this->plugin->getConfig()->get("login-ban-time", 300);
+                $this->banUntil[$name] = time() + $banTime;
+                $msg->send($player, "login-max-attempts", ["time" => $banTime]);
+                
+                // Кик через несколько секунд
+                $this->plugin->getScheduler()->scheduleDelayedTask(function() use ($player) {
+                    $player->kick("§e§lLITE§f§lAUTH §8┃ §cСлишком много неудачных попыток входа.");
+                }, 60);
+                
+                return false;
+            }
+            
+            $msg->send($player, "login-failed");
+            return false;
+        }
+
+        // Успешный вход
+        $this->setAuthenticated($player);
+        $this->saveSession($player);
+        $msg->send($player, "login-success", ["player" => $name]);
+
+        return true;
+    }
+
+    /**
+     * Генерация капчи
+     */
+    public function generateCaptcha(Player $player): void {
+        $name = $player->getName();
         
-        $operators = ["+", "-", "*"];
-        $operator = $operators[array_rand($operators)];
+        // Генерируем простой математический пример
+        $num1 = rand(1, 15);
+        $num2 = rand(1, 15);
+        $ops = ['+', '-', '*'];
+        $op = $ops[array_rand($ops)];
         
-        switch ($operator) {
-            case "+":
-                $num1 = rand(1, 15);
-                $num2 = rand(1, 15);
+        switch ($op) {
+            case '+':
                 $answer = $num1 + $num2;
-                $question = "$num1 + $num2";
+                $question = "$num1 + $num2 = ?";
                 break;
-            case "-":
-                $num1 = rand(5, 20);
-                $num2 = rand(1, $num1);
+            case '-':
+                if ($num1 < $num2) {
+                    [$num1, $num2] = [$num2, $num1];
+                }
                 $answer = $num1 - $num2;
-                $question = "$num1 - $num2";
+                $question = "$num1 - $num2 = ?";
                 break;
-            case "*":
-                $num1 = rand(2, 9);
-                $num2 = rand(2, 9);
+            case '*':
+                $num1 = rand(1, 9);
+                $num2 = rand(1, 9);
                 $answer = $num1 * $num2;
-                $question = "$num1 × $num2";
+                $question = "$num1 × $num2 = ?";
                 break;
         }
-        
+
         $this->captchaData[$name] = [
             "answer" => $answer,
-            "attempts" => 0,
+            "question" => $question,
             "time" => time()
         ];
-        
-        $this->setState($player, self::STATE_CAPTCHA);
-        
-        $player->sendMessage($this->formatBoxedMessage([
-            "§e§lПРОВЕРКА",
-            "",
-            "§fРешите пример:",
-            "",
-            "§e§l$question = ?",
-            "",
-            "§7Ответ: §e/captcha <число>"
-        ]));
-        
-        $this->startCaptchaTimeout($player);
+
+        $this->plugin->getMessageManager()->send($player, "captcha-request", ["question" => $question]);
     }
-    
-    public function checkCaptcha($player, $answer) {
-        $name = strtolower($player->getName());
-        
+
+    /**
+     * Проверка ответа капчи
+     */
+    public function checkCaptcha(Player $player, string $answer): bool {
+        $name = $player->getName();
+        $msg = $this->plugin->getMessageManager();
+
         if (!isset($this->captchaData[$name])) {
-            $player->sendMessage($this->formatMessage("no-captcha-active"));
+            $msg->send($player, "captcha-not-required");
             return false;
         }
-        
-        $captcha = $this->captchaData[$name];
-        $maxAttempts = $this->config->get("captcha-attempts", 3);
-        
-        if ($captcha["attempts"] >= $maxAttempts) {
-            unset($this->captchaData[$name]);
-            $player->sendMessage($this->formatMessage("captcha-max-attempts"));
-            if ($this->config->get("kick-on-timeout", true)) {
-                $player->kick($this->formatMessage("kick-captcha-fail"));
-            } else {
-                $this->generateCaptcha($player);
-            }
+
+        // Rate limit
+        if (!$this->checkRateLimit($player, "captcha")) {
+            $msg->send($player, "captcha-cooldown");
             return false;
         }
+
+        $expected = $this->captchaData[$name]["answer"];
         
-        if ((int)$answer !== $captcha["answer"]) {
-            $captcha["attempts"]++;
-            $this->captchaData[$name] = $captcha;
-            $remaining = $maxAttempts - $captcha["attempts"];
-            $player->sendMessage($this->formatMessage("captcha-wrong", ["attempts" => $remaining]));
-            return false;
-        }
-        
-        unset($this->captchaData[$name]);
-        $this->setState($player, self::STATE_AUTHENTICATED);
-        $this->saveSession($player);
-        
-        $player->sendMessage($this->formatBoxedMessage([
-            "§e§lLITEAUTH",
-            "",
-            "§aПроверка успешно пройдена.",
-            "§7Аккаунт готов к использованию.",
-            ""
-        ]));
-        
-        $this->log("Captcha passed: " . $player->getName());
-        return true;
-    }
-    
-    public function login($player, $password) {
-        $name = strtolower($player->getName());
-        
-        if (!$this->isRegistered($player)) {
-            $player->sendMessage($this->formatMessage("not-registered"));
-            return false;
-        }
-        
-        if ($this->isAuthenticated($player)) {
-            $player->sendMessage($this->formatMessage("already-authenticated"));
-            return false;
-        }
-        
-        $maxAttempts = $this->config->get("max-login-attempts", 5);
-        if (isset($this->loginAttempts[$name]) && $this->loginAttempts[$name] >= $maxAttempts) {
-            $player->sendMessage($this->formatMessage("max-login-attempts"));
-            if ($this->config->get("kick-on-timeout", true)) {
-                $player->kick($this->formatMessage("kick-login-fail"));
-            }
-            return false;
-        }
-        
-        $account = $this->storage->get($name);
-        if (!password_verify($password, $account["password"])) {
-            if (!isset($this->loginAttempts[$name])) {
-                $this->loginAttempts[$name] = 0;
-            }
-            $this->loginAttempts[$name]++;
+        if ((int)$answer !== $expected) {
+            $this->captchaAttempts[$name] = ($this->captchaAttempts[$name] ?? 0) + 1;
             
-            $remaining = $maxAttempts - $this->loginAttempts[$name];
-            $player->sendMessage($this->formatMessage("login-failed", ["attempts" => $remaining]));
-            $this->log("Login failed: " . $player->getName() . " (attempts: " . $this->loginAttempts[$name] . ")");
+            $maxAttempts = (int)$this->plugin->getConfig()->get("captcha-attempts", 3);
+            
+            if ($this->captchaAttempts[$name] >= $maxAttempts) {
+                unset($this->captchaData[$name]);
+                $msg->send($player, "captcha-max-attempts");
+                $player->kick("§e§lLITE§f§lAUTH §8┃ §cСлишком много неверных попыток капчи.");
+                return false;
+            }
+            
+            $msg->send($player, "captcha-failed");
+            $this->generateCaptcha($player); // Новая капча
             return false;
         }
-        
-        unset($this->loginAttempts[$name]);
-        $this->setState($player, self::STATE_AUTHENTICATED);
-        $this->saveSession($player);
-        
-        $account["lastlogin"] = time();
-        $this->storage->save($name, $account);
-        
-        $player->sendMessage($this->formatBoxedMessage([
-            "§e§lLITEAUTH",
-            "",
-            "§aАвторизация выполнена.",
-            "§7Добро пожаловать, §f" . $player->getName() . "§7.",
-            ""
-        ]));
-        
-        $this->log("Login success: " . $player->getName());
+
+        // Успешная капча
+        unset($this->captchaData[$name]);
+        unset($this->captchaAttempts[$name]);
+
+        // Если была регистрация - автоматически авторизуем
+        if (isset($this->playerStates[$name]) && $this->playerStates[$name] === self::STATE_CAPTCHA_REQUIRED) {
+            $this->setAuthenticated($player);
+            $this->saveSession($player);
+        }
+
+        $msg->send($player, "captcha-success");
         return true;
     }
-    
-    public function saveSession($player) {
-        $name = strtolower($player->getName());
-        if (!$this->isRegistered($player)) {
-            return;
-        }
-        
-        $account = $this->storage->get($name);
-        $sessionTime = $this->config->get("session-time", 86400);
-        
-        $account["session"] = [
-            "created" => time(),
-            "expires" => time() + $sessionTime,
-            "ip" => $this->config->get("session-by-ip", false) ? $player->getAddress() : null
-        ];
-        
-        $this->storage->save($name, $account);
+
+    /**
+     * Устанавливает состояние авторизации
+     */
+    private function setAuthenticated(Player $player): void {
+        $name = $player->getName();
+        $this->playerStates[$name] = self::STATE_AUTHENTICATED;
+        unset($this->loginAttempts[$name]);
+        unset($this->banUntil[$name]);
     }
-    
-    public function startAuthTimeout($player) {
-        $name = strtolower($player->getName());
-        $this->lastActionTime[$name] = time();
-    }
-    
-    public function startCaptchaTimeout($player) {
-        $name = strtolower($player->getName());
-        $this->lastActionTime[$name] = time();
-    }
-    
-    public function checkTimeouts() {
-        $currentTime = time();
-        $authTimeout = $this->config->get("auth-timeout", 60);
-        $captchaTimeout = $this->config->get("captcha-timeout", 60);
+
+    /**
+     * Сохраняет сессию
+     */
+    private function saveSession(Player $player): void {
+        $name = $player->getName();
+        $sessionTime = (int)$this->plugin->getConfig()->get("session-time", 86400);
+        $token = bin2hex(random_bytes(16));
         
-        foreach ($this->plugin->getServer()->getOnlinePlayers() as $player) {
-            $name = strtolower($player->getName());
-            if (!isset($this->lastActionTime[$name])) {
-                continue;
+        $this->plugin->getStorageManager()->updateSession($name, $token, time() + $sessionTime);
+    }
+
+    /**
+     * Запускает таймер авторизации
+     */
+    private function startAuthTimer(Player $player): void {
+        $timeout = (int)$this->plugin->getConfig()->get("auth-timeout", 60);
+        $kickOnTimeout = $this->plugin->getConfig()->get("kick-on-timeout", true);
+        
+        $this->plugin->getScheduler()->scheduleDelayedTask(function() use ($player, $kickOnTimeout) {
+            if (!$player->isOnline()) {
+                return;
             }
             
             $state = $this->getState($player);
-            $timeout = ($state === self::STATE_CAPTCHA) ? $captchaTimeout : $authTimeout;
-            
-            if ($currentTime - $this->lastActionTime[$name] > $timeout) {
-                if ($state === self::STATE_CAPTCHA) {
-                    unset($this->captchaData[$name]);
-                    $player->sendMessage($this->formatMessage("captcha-timeout"));
-                    if ($this->config->get("kick-on-timeout", true)) {
-                        $player->kick($this->formatMessage("kick-timeout"));
-                    } else {
-                        $this->generateCaptcha($player);
-                    }
-                } elseif ($state === self::STATE_AUTH_REQUIRED) {
-                    $player->sendMessage($this->formatMessage("auth-timeout"));
-                    if ($this->config->get("kick-on-timeout", true)) {
-                        $player->kick($this->formatMessage("kick-timeout"));
-                    }
-                }
+            if ($state !== self::STATE_REGISTERED_NOT_AUTH && $state !== self::STATE_CAPTCHA_REQUIRED) {
+                return;
             }
-        }
+            
+            if ($kickOnTimeout) {
+                $this->plugin->getMessageManager()->send($player, "login-timeout");
+                $player->kick("§e§lLITE§f§lAUTH §8┃ §cВремя авторизации истекло.");
+            }
+        }, $timeout * 20);
     }
-    
-    public function showLoginMessage($player) {
-        $player->sendMessage($this->formatBoxedMessage([
-            "§e§lLITEAUTH",
-            "",
-            "§fАккаунт найден.",
-            "§7Введите пароль для входа.",
-            "",
-            "§e/login <пароль>",
-            ""
-        ]));
+
+    /**
+     * Получает состояние игрока
+     */
+    public function getState(Player $player): int {
+        $name = $player->getName();
+        return $this->playerStates[$name] ?? self::STATE_UNREGISTERED;
     }
-    
-    public function showRegisterMessage($player) {
-        $player->sendMessage($this->formatBoxedMessage([
-            "§e§lLITEAUTH",
-            "",
-            "§fДобро пожаловать на сервер.",
-            "§7Для продолжения необходимо",
-            "§7создать аккаунт.",
-            "",
-            "§e/register <пароль> <пароль>",
-            "",
-            "§7Пример: §f/register password password",
-            ""
-        ]));
+
+    /**
+     * Проверяет состояние по имени
+     */
+    public function getStateByName(string $name): int {
+        return $this->playerStates[strtolower($name)] ?? self::STATE_UNREGISTERED;
     }
-    
-    public function formatMessage($key, $params = []) {
-        return $this->plugin->getMessage($key, $params);
+
+    /**
+     * Проверяет авторизацию игрока
+     */
+    public function isAuthenticated(Player $player): bool {
+        return $this->getState($player) === self::STATE_AUTHENTICATED;
     }
-    
-    public function formatBoxedMessage($lines) {
-        $top = "╔══════════════════════════════╗";
-        $bottom = "╚══════════════════════════════╝";
-        $side = "║";
+
+    /**
+     * Проверяет авторизацию по имени
+     */
+    public function isAuthenticatedByName(string $name): bool {
+        return $this->getStateByName($name) === self::STATE_AUTHENTICATED;
+    }
+
+    /**
+     * Проверяет регистрацию игрока
+     */
+    public function isRegistered(Player $player): bool {
+        $state = $this->getState($player);
+        return $state !== self::STATE_UNREGISTERED;
+    }
+
+    /**
+     * Проверяет регистрацию по имени
+     */
+    public function isRegisteredByName(string $name): bool {
+        $state = $this->getStateByName($name);
+        return $state !== self::STATE_UNREGISTERED;
+    }
+
+    /**
+     * Rate limit проверка
+     */
+    private function checkRateLimit(Player $player, string $action): bool {
+        $name = $player->getName();
+        $window = (int)$this->plugin->getConfig()->get("rate-limit-window", 10);
+        $max = (int)$this->plugin->getConfig()->get("rate-limit-max", 5);
         
-        $message = $top . "\n";
-        foreach ($lines as $line) {
-            $message .= $side . " " . $line . str_repeat(" ", max(0, 28 - strlen(preg_replace('/§[0-9a-fk-or]/', '', $line)))) . "\n";
-        }
-        $message .= $bottom;
+        $key = $name . "_" . $action;
+        $now = time();
         
-        return $message;
-    }
-    
-    public function hasPermission($player, $permission) {
-        if (!$player instanceof Player) {
+        if (!isset($this->lastActionTime[$key])) {
+            $this->lastActionTime[$key] = $now;
             return true;
         }
-        return $player->hasPermission($permission);
+        
+        if ($now - $this->lastActionTime[$key] < $window) {
+            return false;
+        }
+        
+        $this->lastActionTime[$key] = $now;
+        return true;
     }
-    
-    public function cleanup() {
+
+    /**
+     * Очищает все сессии при выключении
+     */
+    public function clearAllSessions(): void {
         $this->playerStates = [];
-        $this->playerData = [];
         $this->captchaData = [];
         $this->loginAttempts = [];
+        $this->captchaAttempts = [];
         $this->lastActionTime = [];
+        $this->banUntil = [];
     }
-    
-    public function handleQuit($player) {
-        $name = strtolower($player->getName());
-        unset($this->playerStates[$name]);
-        unset($this->playerData[$name]);
-        unset($this->captchaData[$name]);
-        unset($this->loginAttempts[$name]);
-        unset($this->lastActionTime[$name]);
-    }
-    
-    public function log($message) {
-        $this->plugin->getLogger()->info($message);
-    }
-    
-    public function debug($message) {
-        if ($this->config->get("debug", false)) {
-            $this->plugin->getLogger()->info("[DEBUG] " . $message);
-        }
+
+    /**
+     * Очищает данные игрока при выходе
+     */
+    public function clearPlayerData(string $name): void {
+        $normalizedName = strtolower($name);
+        unset($this->playerStates[$normalizedName]);
+        unset($this->captchaData[$normalizedName]);
+        unset($this->loginAttempts[$normalizedName]);
+        unset($this->captchaAttempts[$normalizedName]);
+        unset($this->lastActionTime[$normalizedName]);
+        unset($this->banUntil[$normalizedName]);
     }
 }

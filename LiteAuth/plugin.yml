@@ -1,46 +1,26 @@
 name: LiteAuth
 version: 1.0.0
-api: ["1.12.0", "1.13.0"]
+api: ["3.0.0", "3.0.1", "3.0.2"]
 main: LiteAuth\LiteAuthPlugin
-author: LiteAuthTeam
-description: Production-ready authentication system for Minecraft PE 1.1.5
+author: LiteAuth Team
+description: Advanced authentication system for Minecraft PE 1.1.5 (LiteCore)
 
 commands:
-  register:
-    description: Register a new account
-    aliases: [reg]
-    usage: |
-      §cНеверный формат команды.
-      §7Используйте:
-      §e/register §f<пароль> <пароль>
   login:
     description: Login to your account
     aliases: [l]
-    usage: |
-      §cНеверный формат команды.
-      §7Используйте:
-      §e/login §f<пароль>
+  register:
+    description: Register a new account
+    aliases: [reg]
   captcha:
-    description: Solve captcha challenge
-    usage: |
-      §cНеверный формат команды.
-      §7Используйте:
-      §e/captcha §f<ответ>
+    description: Solve captcha verification
   auth:
-    description: Administration commands
-    usage: |
-      §cНеверный формат команды.
-      §7Доступные подкоманды:
-      §e/auth info <player>
-      §e/auth unregister <player>
-      §e/auth changepassword <player> <password>
-      §e/auth logout <player>
-      §e/auth reload
+    description: Authentication management commands
 
 permissions:
   liteauth.admin:
-    description: Allows using admin commands
+    description: Admin access to LiteAuth commands
     default: op
   liteauth.bypass:
-    description: Bypass authentication requirements
-    default: false
+    description: Bypass authentication checks
+    default: op

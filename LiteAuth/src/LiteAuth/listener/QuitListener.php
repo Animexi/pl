@@ -1,22 +1,29 @@
 <?php
 
+declare(strict_types=1);
+
 namespace LiteAuth\listener;
 
 use pocketmine\event\Listener;
 use pocketmine\event\player\PlayerQuitEvent;
+use pocketmine\Player;
 use LiteAuth\LiteAuthPlugin;
-use LiteAuth\manager\AuthManager;
 
 class QuitListener implements Listener {
-    
-    private $authManager;
-    
-    public function __construct(LiteAuthPlugin $plugin, AuthManager $authManager) {
-        $this->authManager = $authManager;
+
+    /** @var LiteAuthPlugin */
+    private $plugin;
+
+    public function __construct(LiteAuthPlugin $plugin) {
+        $this->plugin = $plugin;
     }
-    
-    public function onPlayerQuit(PlayerQuitEvent $event) {
+
+    public function onQuit(PlayerQuitEvent $event): void {
         $player = $event->getPlayer();
-        $this->authManager->handleQuit($player);
+        $name = $player->getName();
+        
+        // Очищаем временные данные
+        $this->plugin->getAuthManager()->clearPlayerData($name);
+        $this->plugin->getStorageManager()->clearCache($name);
     }
 }

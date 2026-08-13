@@ -1,43 +1,48 @@
 <?php
 
+declare(strict_types=1);
+
 namespace LiteAuth\listener;
 
 use pocketmine\event\Listener;
 use pocketmine\event\player\PlayerMoveEvent;
 use pocketmine\level\Location;
+use pocketmine\Player;
 use LiteAuth\LiteAuthPlugin;
-use LiteAuth\manager\AuthManager;
 
 class MoveListener implements Listener {
-    
+
+    /** @var LiteAuthPlugin */
     private $plugin;
-    private $authManager;
-    
-    public function __construct(LiteAuthPlugin $plugin, AuthManager $authManager) {
+
+    public function __construct(LiteAuthPlugin $plugin) {
         $this->plugin = $plugin;
-        $this->authManager = $authManager;
     }
-    
-    public function onPlayerMove(PlayerMoveEvent $event) {
+
+    public function onMove(PlayerMoveEvent $event): void {
         $player = $event->getPlayer();
         
-        if ($this->authManager->isAuthenticated($player)) {
+        // Обход для администраторов
+        if ($player->hasPermission("liteauth.bypass")) {
             return;
         }
         
-        if ($this->authManager->hasPermission($player, "liteauth.bypass")) {
+        // Проверяем авторизацию
+        if ($this->plugin->getAuthManager()->isAuthenticated($player)) {
             return;
         }
         
+        // Отменяем движение - телепортируем обратно
         $from = $event->getFrom();
         $to = $event->getTo();
         
-        if (abs($from->x - $to->x) < 0.1 && abs($to->y - $from->y) < 0.1 && abs($from->z - $to->z) < 0.1) {
-            return;
+        if ($to !== null && 
+            (abs($from->x - $to->x) > 0.1 || 
+             abs($from->y - $to->y) > 0.1 || 
+             abs($from->z - $to->z) > 0.1)) {
+            
+            $player->teleport(new Location($from->x, $from->y, $from->z, $from->yaw, $from->pitch, $from->getLevel()));
+            $event->setCancelled();
         }
-        
-        $event->setCancelled();
-        
-        $player->teleport(new Location($from->x, $from->y, $from->z, $from->yaw, $from->pitch, $from->getLevel()));
     }
 }

@@ -5,11 +5,11 @@ declare(strict_types=1);
 namespace LiteAuth\listener;
 
 use pocketmine\event\Listener;
-use pocketmine\event\player\PlayerDropItemEvent;
+use pocketmine\event\player\PlayerJoinEvent;
 use pocketmine\Player;
 use LiteAuth\LiteAuthPlugin;
 
-class DropListener implements Listener {
+class AuthListener implements Listener {
 
     /** @var LiteAuthPlugin */
     private $plugin;
@@ -18,17 +18,14 @@ class DropListener implements Listener {
         $this->plugin = $plugin;
     }
 
-    public function onDrop(PlayerDropItemEvent $event): void {
+    public function onJoin(PlayerJoinEvent $event): void {
         $player = $event->getPlayer();
         
+        // Обход для администраторов с bypass
         if ($player->hasPermission("liteauth.bypass")) {
             return;
         }
         
-        if ($this->plugin->getAuthManager()->isAuthenticated($player)) {
-            return;
-        }
-        
-        $event->setCancelled();
+        $this->plugin->getAuthManager()->handleJoin($player);
     }
 }

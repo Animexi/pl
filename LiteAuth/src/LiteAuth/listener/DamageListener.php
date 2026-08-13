@@ -1,39 +1,39 @@
 <?php
 
+declare(strict_types=1);
+
 namespace LiteAuth\listener;
 
 use pocketmine\event\Listener;
 use pocketmine\event\entity\EntityDamageEvent;
 use pocketmine\event\entity\EntityDamageByEntityEvent;
+use pocketmine\Player;
 use LiteAuth\LiteAuthPlugin;
-use LiteAuth\manager\AuthManager;
 
 class DamageListener implements Listener {
-    
+
+    /** @var LiteAuthPlugin */
     private $plugin;
-    private $authManager;
-    
-    public function __construct(LiteAuthPlugin $plugin, AuthManager $authManager) {
+
+    public function __construct(LiteAuthPlugin $plugin) {
         $this->plugin = $plugin;
-        $this->authManager = $authManager;
     }
-    
-    public function onEntityDamage(EntityDamageEvent $event) {
-        if ($event instanceof EntityDamageByEntityEvent) {
-            $damager = $event->getDamager();
-            if ($damager instanceof \pocketmine\Player) {
-                if (!$this->authManager->isAuthenticated($damager)) {
-                    if (!$this->authManager->hasPermission($damager, "liteauth.bypass")) {
-                        $event->setCancelled();
-                    }
-                }
-            }
+
+    public function onDamage(EntityDamageEvent $event): void {
+        $entity = $event->getEntity();
+        
+        if (!$entity instanceof Player) {
+            return;
         }
         
-        $victim = $event->getEntity();
-        if ($victim instanceof \pocketmine\Player) {
-            if (!$this->authManager->isAuthenticated($victim)) {
-                if (!$this->authManager->hasPermission($victim, "liteauth.bypass")) {
+        // Если игрок получает урон - пропускаем (чтобы не был бессмертным)
+        // Но если он сам наносит урон до авторизации - отменяем
+        
+        if ($event instanceof EntityDamageByEntityEvent) {
+            $damager = $event->getDamager();
+            
+            if ($damager instanceof Player && !$damager->hasPermission("liteauth.bypass")) {
+                if (!$this->plugin->getAuthManager()->isAuthenticated($damager)) {
                     $event->setCancelled();
                 }
             }

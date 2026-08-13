@@ -1,54 +1,52 @@
 <?php
 
+declare(strict_types=1);
+
 namespace LiteAuth\command;
 
 use pocketmine\command\Command;
 use pocketmine\command\CommandSender;
 use pocketmine\Player;
-use pocketmine\utils\TextFormat;
 use LiteAuth\LiteAuthPlugin;
-use LiteAuth\manager\AuthManager;
 
 class RegisterCommand extends Command {
-    
+
+    /** @var LiteAuthPlugin */
     private $plugin;
-    private $authManager;
-    
-    public function __construct(LiteAuthPlugin $plugin, AuthManager $authManager) {
+
+    public function __construct(LiteAuthPlugin $plugin) {
         parent::__construct("register", "Register a new account", "/register <password> <password>", ["reg"]);
         $this->setPermission("liteauth.register");
         $this->plugin = $plugin;
-        $this->authManager = $authManager;
     }
-    
-    public function execute(CommandSender $sender, $label, array $args) {
+
+    public function execute(CommandSender $sender, string $commandLabel, array $args): bool {
         if (!$sender instanceof Player) {
-            $sender->sendMessage(TextFormat::RED . "Эту команду можно использовать только в игре.");
+            $sender->sendMessage("§cЭта команда доступна только игрокам.");
             return true;
         }
-        
-        if ($this->authManager->isRegistered($sender)) {
-            $sender->sendMessage($this->authManager->formatMessage("already-registered"));
+
+        $player = $sender;
+        $msg = $this->plugin->getMessageManager();
+
+        // Проверка на уже зарегистрированных
+        if ($this->plugin->getStorageManager()->isRegistered($player->getName())) {
+            $msg->send($player, "register-already-exists");
             return true;
         }
-        
+
+        // Проверка аргументов
         if (count($args) < 2) {
-            $sender->sendMessage($this->authManager->formatBoxedMessage([
-                "§e§lLITEAUTH",
-                "",
-                "§cНеверный формат команды.",
-                "",
-                "§7Используйте:",
-                "§e/register §f<пароль> <пароль>",
-                ""
-            ]));
+            $msg->send($player, "command-usage", ["usage" => "§e/register <пароль> <пароль>"]);
             return true;
         }
-        
+
         $password = $args[0];
         $confirmPassword = $args[1];
+
+        // Выполняем регистрацию
+        $this->plugin->getAuthManager()->register($player, $password, $confirmPassword);
         
-        $this->authManager->register($sender, $password, $confirmPassword);
         return true;
     }
 }

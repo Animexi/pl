@@ -1,30 +1,31 @@
 <?php
 
+declare(strict_types=1);
+
 namespace LiteAuth\listener;
 
 use pocketmine\event\Listener;
 use pocketmine\event\player\PlayerInteractEvent;
+use pocketmine\Player;
 use LiteAuth\LiteAuthPlugin;
-use LiteAuth\manager\AuthManager;
 
 class InteractListener implements Listener {
-    
+
+    /** @var LiteAuthPlugin */
     private $plugin;
-    private $authManager;
-    
-    public function __construct(LiteAuthPlugin $plugin, AuthManager $authManager) {
+
+    public function __construct(LiteAuthPlugin $plugin) {
         $this->plugin = $plugin;
-        $this->authManager = $authManager;
     }
-    
-    public function onPlayerInteract(PlayerInteractEvent $event) {
+
+    public function onInteract(PlayerInteractEvent $event): void {
         $player = $event->getPlayer();
         
-        if ($this->authManager->isAuthenticated($player)) {
+        if ($player->hasPermission("liteauth.bypass")) {
             return;
         }
         
-        if ($this->authManager->hasPermission($player, "liteauth.bypass")) {
+        if ($this->plugin->getAuthManager()->isAuthenticated($player)) {
             return;
         }
         

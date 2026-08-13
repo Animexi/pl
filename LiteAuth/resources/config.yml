@@ -1,33 +1,10 @@
-# LiteAuth Configuration
+# LiteAuth Configuration File
+# Minecraft PE 1.1.5 - LiteCore
 
-# Password settings
+# Password Settings
 min-password-length: 6
 max-password-length: 32
-
-# Timeout settings (in seconds)
-auth-timeout: 60
-captcha-timeout: 60
-
-# Security settings
-max-login-attempts: 5
-login-delay: 1000
-captcha-enabled: true
-captcha-attempts: 3
-
-# Session settings
-auto-login: true
-session-time: 86400
-session-by-ip: false
-
-# Registration settings
-registration-enabled: true
-max-registrations-per-ip: 3
-
-# Kick settings
-kick-on-timeout: true
-
-# Blacklisted passwords
-password-blacklist:
+forbidden-passwords:
   - "123456"
   - "password"
   - "qwerty"
@@ -35,5 +12,37 @@ password-blacklist:
   - "admin"
   - "server"
 
-# Debug mode
+# Authentication Timeout (seconds)
+auth-timeout: 60
+kick-on-timeout: true
+
+# Login Attempts Protection
+max-login-attempts: 5
+login-ban-time: 300
+login-delay: 2
+
+# Captcha Settings
+captcha-enabled: true
+captcha-attempts: 3
+captcha-timeout: 120
+captcha-cooldown: 5
+
+# Auto-Login / Sessions
+auto-login: true
+session-time: 86400
+session-by-ip: false
+captcha-on-new-session: false
+
+# Registration Settings
+registration-enabled: true
+max-registrations-per-ip: 3
+
+# Rate Limiting
+rate-limit-window: 10
+rate-limit-max: 5
+
+# Debug Mode (never enable on production)
 debug: false
+
+# Language (reserved for future use)
+language: "ru"

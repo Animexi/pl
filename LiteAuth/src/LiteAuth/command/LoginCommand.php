@@ -1,52 +1,57 @@
 <?php
 
+declare(strict_types=1);
+
 namespace LiteAuth\command;
 
 use pocketmine\command\Command;
 use pocketmine\command\CommandSender;
 use pocketmine\Player;
-use pocketmine\utils\TextFormat;
 use LiteAuth\LiteAuthPlugin;
-use LiteAuth\manager\AuthManager;
 
 class LoginCommand extends Command {
-    
+
+    /** @var LiteAuthPlugin */
     private $plugin;
-    private $authManager;
-    
-    public function __construct(LiteAuthPlugin $plugin, AuthManager $authManager) {
+
+    public function __construct(LiteAuthPlugin $plugin) {
         parent::__construct("login", "Login to your account", "/login <password>", ["l"]);
         $this->setPermission("liteauth.login");
         $this->plugin = $plugin;
-        $this->authManager = $authManager;
     }
-    
-    public function execute(CommandSender $sender, $label, array $args) {
+
+    public function execute(CommandSender $sender, string $commandLabel, array $args): bool {
         if (!$sender instanceof Player) {
-            $sender->sendMessage(TextFormat::RED . "Эту команду можно использовать только в игре.");
+            $sender->sendMessage("§cЭта команда доступна только игрокам.");
             return true;
         }
-        
-        if (!$this->authManager->isRegistered($sender)) {
-            $sender->sendMessage($this->authManager->formatMessage("not-registered"));
+
+        $player = $sender;
+        $msg = $this->plugin->getMessageManager();
+
+        // Проверка на уже авторизованных
+        if ($this->plugin->getAuthManager()->isAuthenticated($player)) {
+            $msg->send($player, "already-authenticated");
             return true;
         }
-        
+
+        // Проверка аргументов
         if (count($args) < 1) {
-            $sender->sendMessage($this->authManager->formatBoxedMessage([
-                "§e§lLITEAUTH",
-                "",
-                "§cНеверный формат команды.",
-                "",
-                "§7Используйте:",
-                "§e/login §f<пароль>",
-                ""
-            ]));
+            $msg->send($player, "command-usage", ["usage" => "§e/login <пароль>"]);
             return true;
         }
+
+        $password = implode(' ', $args);
         
-        $password = $args[0];
-        $this->authManager->login($sender, $password);
+        // Проверка регистрации
+        if (!$this->plugin->getStorageManager()->isRegistered($player->getName())) {
+            $msg->send($player, "login-not-registered");
+            return true;
+        }
+
+        // Выполняем вход
+        $this->plugin->getAuthManager()->login($player, $password);
+        
         return true;
     }
 }

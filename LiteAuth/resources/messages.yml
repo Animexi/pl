@@ -1,13 +1,10 @@
-# LiteAuth Messages
-# Use {prefix} for plugin prefix
-# Use {player} for player name
-# Use color codes: §e (yellow), §f (white), §7 (gray), §8 (dark gray), §c (red), §a (green), §l (bold)
+# LiteAuth Messages File
+# Use Minecraft color codes: §e (yellow), §f (white), §7 (gray), §8 (dark gray), §c (red), §a (green), §l (bold)
 
-# Prefix for all messages
-prefix: "§e§lLITE§f§lAUTH §8┃"
+prefix: "§e§lLITE§f§lAUTH §8┃ "
 
-# Join messages
-welcome-unregistered: |
+# Join Messages
+join-unregistered: |
   ╔══════════════════════════════╗
   ║       §e§lLITEAUTH
   ║
@@ -20,7 +17,7 @@ welcome-unregistered: |
   ║ §7Пример: §f/register password password
   ╚══════════════════════════════╝
 
-welcome-registered: |
+join-registered: |
   ╔══════════════════════════════╗
   ║       §e§lLITEAUTH
   ║
@@ -30,7 +27,9 @@ welcome-registered: |
   ║ §e/login <пароль>
   ╚══════════════════════════════╝
 
-# Registration messages
+auto-login-success: "§e§lLITE§f§lAUTH §8┃ §aАвтоматическая авторизация выполнена."
+
+# Registration Messages
 register-success: |
   ╔══════════════════════════════╗
   ║       §e§lLITEAUTH
@@ -41,23 +40,37 @@ register-success: |
   ║ §7небольшую проверку.
   ╚══════════════════════════════╝
 
-already-registered: "§e§lLITE§f§lAUTH §8┃ §cЭтот аккаунт уже зарегистрирован. §7Используйте §e/login <пароль>§7."
-not-registered: "§e§lLITE§f§lAUTH §8┃ §cАккаунт не зарегистрирован. §7Используйте §e/register <пароль> <пароль>§7."
-registration-disabled: "§e§lLITE§f§lAUTH §8┃ §cРегистрация временно отключена."
-password-mismatch: "§e§lLITE§f§lAUTH §8┃ §cПароли не совпадают."
-password-too-short: "§e§lLITE§f§lAUTH §8┃ §cПароль слишком короткий. Минимум {min} символов."
-password-too-long: "§e§lLITE§f§lAUTH §8┃ §cПароль слишком длинный. Максимум {max} символов."
-password-invalid-chars: "§e§lLITE§f§lAUTH §8┃ §cПароль содержит недопустимые символы."
-password-blacklisted: "§e§lLITE§f§lAUTH §8┃ §cЭтот пароль слишком простой и запрещён."
+register-already-exists: "§e§lLITE§f§lAUTH §8┃ §cЭтот аккаунт уже зарегистрирован. §7Используйте §e/login <пароль>§7."
+register-disabled: "§e§lLITE§f§lAUTH §8┃ §cРегистрация в данный момент отключена."
+register-password-mismatch: "§e§lLITE§f§lAUTH §8┃ §cПароли не совпадают."
+register-password-too-short: "§e§lLITE§f§lAUTH §8┃ §cПароль слишком короткий. Минимум {min} символов."
+register-password-too-long: "§e§lLITE§f§lAUTH §8┃ §cПароль слишком длинный. Максимум {max} символов."
+register-invalid-chars: "§e§lLITE§f§lAUTH §8┃ §cПароль содержит недопустимые символы."
+register-forbidden-password: "§e§lLITE§f§lAUTH §8┃ §cЭтот пароль запрещён к использованию."
+register-ip-limit: "§e§lLITE§f§lAUTH §8┃ §cПревышен лимит регистраций с вашего IP."
 
-# Captcha messages
-captcha-box: |
+# Login Messages
+login-success: |
+  ╔══════════════════════════════╗
+  ║       §e§lLITEAUTH
+  ║
+  ║ §aАвторизация выполнена.
+  ║ §7Добро пожаловать, §f{player}§7.
+  ╚══════════════════════════════╝
+
+login-failed: "§e§lLITE§f§lAUTH §8┃ §cНеверный пароль."
+login-max-attempts: "§e§lLITE§f§lAUTH §8┃ §cСлишком много неудачных попыток. Попробуйте через {time} сек."
+login-not-registered: "§e§lLITE§f§lAUTH §8┃ §cАккаунт не зарегистрирован. §7Используйте §e/register <пароль> <пароль>§7."
+login-timeout: "§e§lLITE§f§lAUTH §8┃ §cВремя авторизации истекло."
+
+# Captcha Messages
+captcha-request: |
   ╔══════════════════════════════╗
   ║       §e§lПРОВЕРКА
   ║
   ║ §fРешите пример:
   ║
-  ║ §e§l{question} = ?
+  ║ §e§l{question}
   ║
   ║ §7Ответ: §e/captcha <число>
   ╚══════════════════════════════╝
@@ -70,42 +83,52 @@ captcha-success: |
   ║ §7Аккаунт готов к использованию.
   ╚══════════════════════════════╝
 
-captcha-wrong: "§e§lLITE§f§lAUTH §8┃ §cНеверный ответ. Попробуйте ещё раз. Осталось попыток: {attempts}"
-captcha-max-attempts: "§e§lLITE§f§lAUTH §8┃ §cСлишком много неправильных ответов."
+captcha-failed: "§e§lLITE§f§lAUTH §8┃ §cНеверный ответ. Попробуйте ещё раз."
+captcha-max-attempts: "§e§lLITE§f§lAUTH §8┃ §cСлишком много неверных попыток капчи."
 captcha-timeout: "§e§lLITE§f§lAUTH §8┃ §cВремя проверки истекло."
-no-captcha-active: "§e§lLITE§f§lAUTH §8┃ §cУ вас нет активной капчи."
+captcha-not-required: "§e§lLITE§f§lAUTH §8┃ §cКапча сейчас не требуется."
+captcha-cooldown: "§e§lLITE§f§lAUTH §8┃ §7Подождите перед повторным запросом."
 
-# Login messages
-login-success: |
+# General Messages
+not-authenticated: "§e§lLITE§f§lAUTH §8┃ §cСначала необходимо авторизоваться."
+already-authenticated: "§e§lLITE§f§lAUTH §8┃ §aВы уже авторизованы."
+command-usage: |
   ╔══════════════════════════════╗
   ║       §e§lLITEAUTH
   ║
-  ║ §aАвторизация выполнена.
-  ║ §7Добро пожаловать, §f{player}§7.
+  ║ §cНеверный формат команды.
+  ║
+  ║ §7Используйте:
+  ║ {usage}
   ╚══════════════════════════════╝
 
-login-failed: "§e§lLITE§f§lAUTH §8┃ §cНеверный пароль. Осталось попыток: {attempts}"
-max-login-attempts: "§e§lLITE§f§lAUTH §8┃ §cСлишком много неудачных попыток."
-already-authenticated: "§e§lLITE§f§lAUTH §8┃ §aВы уже авторизованы."
-auto-login-success: "§e§lLITE§f§lAUTH §8┃ §aАвтоматическая авторизация выполнена."
-
-# Timeout messages
-auth-timeout: "§e§lLITE§f§lAUTH §8┃ §cВремя авторизации истекло."
-kick-timeout: "§cВремя на авторизацию истекло."
-kick-login-fail: "§cСлишком много неудачных попыток входа."
-kick-captcha-fail: "§cНе удалось пройти проверку капчи."
-
-# Block messages
-chat-blocked: "§e§lLITE§f§lAUTH §8┃ §cСначала необходимо авторизоваться."
-command-blocked: "§e§lLITE§f§lAUTH §8┃ §cСначала необходимо авторизоваться."
-
-# Admin messages
-unknown-subcommand: "§e§lLITE§f§lAUTH §8┃ §cНеизвестная подкоманда."
+no-permission: "§e§lLITE§f§lAUTH §8┃ §cУ вас нет прав для этой команды."
+player-not-found: "§e§lLITE§f§lAUTH §8┃ §cИгрок не найден."
 reload-success: "§e§lLITE§f§lAUTH §8┃ §aКонфигурация успешно перезагружена."
-account-deleted: "§e§lLITE§f§lAUTH §8┃ §aАккаунт игрока §f{player} §aудалён."
-password-changed: "§e§lLITE§f§lAUTH §8┃ §aПароль изменён для §f{player}§a."
-logout-success: "§e§lLITE§f§lAUTH §8┃ §aИгрок §f{player} §aвышел из аккаунта."
+reload-failed: "§e§lLITE§f§lAUTH §8┃ §cНе удалось загрузить конфигурацию."
 
-# Error messages
-error-generic: "§e§lLITE§f§lAUTH §8┃ §cПроизошла ошибка."
-message-not-found: "§e§lLITE§f§lAUTH §8┃ §7Сообщение не найдено."
+# Admin Messages
+admin-info-header: |
+  ╔══════════════════════════════╗
+  ║       §e§lINFO
+  ║
+  ║ §fИгрок: §e{player}
+  ║ §fСтатус: §e{status}
+  ║ §fЗарегистрирован: §e{registered}
+  ║ §fДата регистрации: §e{regdate}
+  ║ §fПоследний вход: §e{lastlogin}
+  ╚══════════════════════════════╝
+
+admin-unregister-success: "§e§lLITE§f§lAUTH §8┃ §aАккаунт игрока §f{player} §aудалён."
+admin-changepassword-success: "§e§lLITE§f§lAUTH §8┃ §aПароль игрока §f{player} §aизменён."
+admin-logout-success: "§e§lLITE§f§lAUTH §8┃ §aИгрок §f{player} §aвыход из системы."
+
+# Auth Command Status
+auth-status: |
+  ╔══════════════════════════════╗
+  ║       §e§lLITEAUTH
+  ║
+  ║ §7Аккаунт: §f{status}
+  ║ §7Сессия: §f{session}
+  ║ §7Авто-логин: §f{autologin}
+  ╚══════════════════════════════╝

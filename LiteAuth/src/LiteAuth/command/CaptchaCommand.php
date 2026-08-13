@@ -1,52 +1,50 @@
 <?php
 
+declare(strict_types=1);
+
 namespace LiteAuth\command;
 
 use pocketmine\command\Command;
 use pocketmine\command\CommandSender;
 use pocketmine\Player;
-use pocketmine\utils\TextFormat;
 use LiteAuth\LiteAuthPlugin;
-use LiteAuth\manager\AuthManager;
 
 class CaptchaCommand extends Command {
-    
+
+    /** @var LiteAuthPlugin */
     private $plugin;
-    private $authManager;
-    
-    public function __construct(LiteAuthPlugin $plugin, AuthManager $authManager) {
-        parent::__construct("captcha", "Solve captcha challenge", "/captcha <answer>");
+
+    public function __construct(LiteAuthPlugin $plugin) {
+        parent::__construct("captcha", "Solve captcha verification", "/captcha <answer>", []);
         $this->setPermission("liteauth.captcha");
         $this->plugin = $plugin;
-        $this->authManager = $authManager;
     }
-    
-    public function execute(CommandSender $sender, $label, array $args) {
+
+    public function execute(CommandSender $sender, string $commandLabel, array $args): bool {
         if (!$sender instanceof Player) {
-            $sender->sendMessage(TextFormat::RED . "Эту команду можно использовать только в игре.");
+            $sender->sendMessage("§cЭта команда доступна только игрокам.");
             return true;
         }
-        
-        if (!$this->authManager->needsCaptcha($sender)) {
-            $sender->sendMessage($this->authManager->formatMessage("no-captcha-active"));
-            return true;
-        }
-        
+
+        $player = $sender;
+        $msg = $this->plugin->getMessageManager();
+        $authManager = $this->plugin->getAuthManager();
+
+        // Если нет аргументов - показываем новую капчу
         if (count($args) < 1) {
-            $sender->sendMessage($this->authManager->formatBoxedMessage([
-                "§e§lLITEAUTH",
-                "",
-                "§cНеверный формат команды.",
-                "",
-                "§7Используйте:",
-                "§e/captcha §f<число>",
-                ""
-            ]));
+            $state = $authManager->getState($player);
+            if ($state === LiteAuth\manager\AuthManager::STATE_CAPTCHA_REQUIRED) {
+                $authManager->generateCaptcha($player);
+            } else {
+                $msg->send($player, "captcha-not-required");
+            }
             return true;
         }
-        
+
+        // Проверка ответа
         $answer = $args[0];
-        $this->authManager->checkCaptcha($sender, $answer);
+        $authManager->checkCaptcha($player, $answer);
+        
         return true;
     }
 }
