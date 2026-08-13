@@ -29,7 +29,7 @@ class LiteAuthPlugin extends PluginBase {
     private $storageManager;
     private $messageManager;
     private $config;
-    private $messages;
+    private $messagesConfig;
 
     public function onEnable() {
         self::$instance = $this;
@@ -43,7 +43,7 @@ class LiteAuthPlugin extends PluginBase {
         $this->saveResource("messages.yml");
 
         $this->config = new Config($this->getDataFolder() . "config.yml", Config::YAML);
-        $this->messages = new Config($this->getDataFolder() . "messages.yml", Config::YAML);
+        $this->messagesConfig = new Config($this->getDataFolder() . "messages.yml", Config::YAML);
 
         $this->messageManager = new MessageManager($this);
         $this->storageManager = new StorageManager($this);
@@ -108,12 +108,8 @@ class LiteAuthPlugin extends PluginBase {
         return $this->messageManager;
     }
 
-    public function getConfig(): Config {
-        return $this->config;
-    }
-
-    public function getMessages(): Config {
-        return $this->messages;
+    public function getMessagesConfig(): Config {
+        return $this->messagesConfig;
     }
 
     public function getConfigValue(string $key, $default = null) {
@@ -121,10 +117,10 @@ class LiteAuthPlugin extends PluginBase {
         return $value !== null ? $value : $default;
     }
 
-    public function reloadConfig(): bool {
+    public function reloadConfigs(): bool {
         try {
             $this->config = new Config($this->getDataFolder() . "config.yml", Config::YAML);
-            $this->messages = new Config($this->getDataFolder() . "messages.yml", Config::YAML);
+            $this->messagesConfig = new Config($this->getDataFolder() . "messages.yml", Config::YAML);
             return true;
         } catch (\Exception $e) {
             $this->getLogger()->error("Failed to reload config: " . $e->getMessage());

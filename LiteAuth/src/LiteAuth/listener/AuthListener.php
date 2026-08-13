@@ -21,6 +21,7 @@ class AuthListener implements Listener {
     public function onPlayerJoin(PlayerJoinEvent $event) {
         $player = $event->getPlayer();
         $authManager = $this->plugin->getAuthManager();
+        $msgManager = $this->plugin->getMessageManager();
 
         // Check if player has bypass permission
         if ($player->hasPermission("liteauth.bypass")) {
@@ -31,7 +32,7 @@ class AuthListener implements Listener {
         // Check if player is registered
         if (!$authManager->isRegistered($player)) {
             $authManager->setState($player, AuthManager::STATE_UNREGISTERED);
-            $this->plugin->getMessageManager()->send($player, "join-unregistered");
+            $msgManager->sendWelcome($player);
             return;
         }
 
@@ -39,12 +40,12 @@ class AuthListener implements Listener {
         if ($this->plugin->getConfigValue("auto-login", true) && $authManager->hasValidSession($player)) {
             $authManager->setState($player, AuthManager::STATE_AUTHENTICATED);
             $authManager->saveSession($player);
-            $this->plugin->getMessageManager()->sendRaw($player, $this->plugin->getMessageManager()->get("auto-login-success"));
+            $msgManager->sendAutoLogin($player);
             return;
         }
 
         // Require login
         $authManager->setState($player, AuthManager::STATE_AUTH_REQUIRED);
-        $this->plugin->getMessageManager()->send($player, "join-registered");
+        $msgManager->sendLoginRequest($player);
     }
 }

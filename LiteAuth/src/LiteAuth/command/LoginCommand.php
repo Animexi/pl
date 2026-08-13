@@ -25,14 +25,14 @@ class LoginCommand extends Command {
         }
 
         if (count($args) < 1) {
-            $this->plugin->getMessageManager()->send($sender, "usage-login");
+            $this->plugin->getMessageManager()->sendInvalidCommand($sender, "/login <пароль>");
             return true;
         }
 
         $authManager = $this->plugin->getAuthManager();
         
         if (!$authManager->isRegistered($sender)) {
-            $this->plugin->getMessageManager()->send($sender, "error-not-registered");
+            $this->plugin->getMessageManager()->sendNotRegistered($sender);
             return true;
         }
 
@@ -44,17 +44,17 @@ class LoginCommand extends Command {
         $password = implode(" ", $args);
         
         if ($authManager->login($sender, $password)) {
-            $this->plugin->getMessageManager()->send($sender, "login-success", ["player" => $sender->getName()]);
+            $this->plugin->getMessageManager()->sendLoginSuccess($sender);
         } else {
             $authManager->incrementLoginAttempts($sender);
             $attempts = $authManager->getLoginAttempts($sender);
             $maxAttempts = $this->plugin->getConfigValue("max-login-attempts", 5);
             
             if ($attempts >= $maxAttempts) {
-                $this->plugin->getMessageManager()->send($sender, "error-max-attempts");
+                $this->plugin->getMessageManager()->sendTooManyAttempts($sender);
                 $sender->kick("Слишком много неудачных попыток входа.", false);
             } else {
-                $this->plugin->getMessageManager()->send($sender, "error-invalid-password");
+                $this->plugin->getMessageManager()->sendWrongPassword($sender);
             }
         }
 

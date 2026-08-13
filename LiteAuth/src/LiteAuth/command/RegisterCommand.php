@@ -25,14 +25,15 @@ class RegisterCommand extends Command {
         }
 
         $authManager = $this->plugin->getAuthManager();
+        $msgManager = $this->plugin->getMessageManager();
 
         if ($authManager->isRegistered($sender)) {
-            $this->plugin->getMessageManager()->send($sender, "error-already-registered");
+            $msgManager->sendAlreadyRegistered($sender);
             return true;
         }
 
         if (count($args) < 2) {
-            $this->plugin->getMessageManager()->send($sender, "usage-register");
+            $msgManager->sendInvalidCommand($sender, "/register <пароль> <пароль>");
             return true;
         }
 
@@ -43,46 +44,44 @@ class RegisterCommand extends Command {
         $maxLen = $this->plugin->getConfigValue("max-password-length", 32);
 
         if (strlen($password) < $minLen) {
-            $this->plugin->getMessageManager()->send($sender, "error-password-short", ["min" => $minLen]);
+            $msgManager->sendPasswordTooShort($sender, $minLen);
             return true;
         }
 
         if (strlen($password) > $maxLen) {
-            $this->plugin->getMessageManager()->send($sender, "error-password-long", ["max" => $maxLen]);
+            $msgManager->sendPasswordTooLong($sender, $maxLen);
             return true;
         }
 
         if ($password !== $confirm) {
-            $this->plugin->getMessageManager()->send($sender, "error-password-mismatch");
+            $msgManager->sendPasswordMismatch($sender);
             return true;
         }
 
         $blacklist = $this->plugin->getConfigValue("password-blacklist", []);
         if (in_array(strtolower($password), array_map("strtolower", $blacklist))) {
-            $this->plugin->getMessageManager()->send($sender, "error-password-simple");
+            $msgManager->sendSimplePassword($sender);
             return true;
         }
 
         $ip = $sender->getAddress();
         $maxReg = $this->plugin->getConfigValue("max-registrations-per-ip", 3);
         if ($this->plugin->getStorageManager()->getRegistrationsByIp($ip) >= $maxReg) {
-            $sender->sendMessage("§e§lLITE§f§lAUTH §8┃ §cПревышен лимит регистраций с вашего IP.");
+            $msgManager->sendMaxRegistrations($sender);
+            return true;
+        }
+
+        if (!$this->plugin->getConfigValue("registration-enabled", true)) {
+            $msgManager->sendRegistrationDisabled($sender);
             return true;
         }
 
         if ($authManager->register($sender, $password)) {
-            $this->plugin->getMessageManager()->send($sender, "register-success");
+            $msgManager->sendRegisterSuccess($sender);
             
-            // Auto-login after registration if enabled
-            if ($this->plugin->getConfigValue("auto-login", true)) {
-                $authManager->setState($sender, \LiteAuth\manager\AuthManager::STATE_AUTHENTICATED);
-                $authManager->saveSession($sender);
-                $this->plugin->getMessageManager()->sendRaw($sender, "§e§lLITE§f§lAUTH §8┃ §aАвтоматическая авторизация выполнена после регистрации.");
-            } else {
-                // Show captcha
-                $captcha = $authManager->generateCaptcha($sender);
-                $this->plugin->getMessageManager()->send($sender, "captcha-message", ["captcha" => $captcha]);
-            }
+            // Generate captcha
+            $captcha = $authManager->generateCaptcha($sender);
+            $msgManager->sendCaptcha($sender, $captcha);
         } else {
             $sender->sendMessage("§e§lLITE§f§lAUTH §8┃ §cНе удалось создать аккаунт. Попробуйте позже.");
         }

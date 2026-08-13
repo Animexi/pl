@@ -25,12 +25,13 @@ class CaptchaCommand extends Command {
         }
 
         $authManager = $this->plugin->getAuthManager();
+        $msgManager = $this->plugin->getMessageManager();
 
         // If no args and needs captcha, show new captcha
         if (count($args) === 0) {
             if ($authManager->needsCaptcha($sender)) {
                 $captcha = $authManager->generateCaptcha($sender);
-                $this->plugin->getMessageManager()->send($sender, "captcha-message", ["captcha" => $captcha]);
+                $msgManager->sendCaptcha($sender, $captcha);
                 return true;
             }
             $sender->sendMessage("§e§lLITE§f§lAUTH §8┃ §cУ вас нет активной капчи.");
@@ -45,7 +46,7 @@ class CaptchaCommand extends Command {
         $maxAttempts = $this->plugin->getConfigValue("captcha-attempts", 3);
         
         if ($authManager->getCaptchaAttemptCount($sender) >= $maxAttempts) {
-            $this->plugin->getMessageManager()->send($sender, "error-max-attempts");
+            $msgManager->sendTooManyAttempts($sender);
             $sender->kick("Слишком много неудачных попыток ввода капчи.", false);
             return true;
         }
@@ -56,10 +57,10 @@ class CaptchaCommand extends Command {
             $authManager->setState($sender, \LiteAuth\manager\AuthManager::STATE_AUTHENTICATED);
             $authManager->resetCaptchaAttempts($sender);
             $authManager->saveSession($sender);
-            $this->plugin->getMessageManager()->send($sender, "captcha-success");
+            $msgManager->sendCaptchaSuccess($sender);
         } else {
             $authManager->incrementCaptchaAttempts($sender);
-            $this->plugin->getMessageManager()->send($sender, "error-captcha-wrong");
+            $msgManager->sendCaptchaFailed($sender);
             
             if ($authManager->getCaptchaAttemptCount($sender) >= $maxAttempts) {
                 $sender->kick("Слишком много неудачных попыток ввода капчи.", false);
