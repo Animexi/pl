@@ -5,10 +5,7 @@ declare(strict_types=1);
 namespace LiteAuth;
 
 use pocketmine\plugin\PluginBase;
-use pocketmine\event\Listener;
 use pocketmine\utils\Config;
-use pocketmine\Player;
-use pocketmine\Server;
 use LiteAuth\manager\AuthManager;
 use LiteAuth\manager\StorageManager;
 use LiteAuth\manager\MessageManager;
@@ -28,44 +25,38 @@ use LiteAuth\command\AuthCommand;
 class LiteAuthPlugin extends PluginBase {
 
     private static $instance;
-    
-    /** @var AuthManager */
     private $authManager;
-    
-    /** @var StorageManager */
     private $storageManager;
-    
-    /** @var MessageManager */
     private $messageManager;
+    private $config;
+    private $messages;
 
     public function onEnable() {
         self::$instance = $this;
         
         $this->getLogger()->info("LiteAuth v" . $this->getDescription()->getVersion() . " enabled.");
         
-        // Создаём папки
         @mkdir($this->getDataFolder() . "players");
         @mkdir($this->getDataFolder() . "logs");
 
-        // Загружаем конфиги
         $this->saveResource("config.yml");
         $this->saveResource("messages.yml");
+
+        $this->config = new Config($this->getDataFolder() . "config.yml", Config::YAML);
+        $this->messages = new Config($this->getDataFolder() . "messages.yml", Config::YAML);
 
         $this->messageManager = new MessageManager($this);
         $this->storageManager = new StorageManager($this);
         $this->authManager = new AuthManager($this);
 
-        // Регистрируем команды
         $this->registerCommands();
-
-        // Регистрируем слушателей
         $this->registerListeners();
 
         $this->getLogger()->info("Storage loaded.");
-        if ($this->getConfig()->get("captcha-enabled", true)) {
+        if ($this->getConfigValue("captcha-enabled", true)) {
             $this->getLogger()->info("Captcha system enabled.");
         }
-        if ($this->getConfig()->get("auto-login", true)) {
+        if ($this->getConfigValue("auto-login", true)) {
             $this->getLogger()->info("Auto-login enabled.");
         }
         
@@ -82,17 +73,10 @@ class LiteAuthPlugin extends PluginBase {
     private function registerCommands() {
         $commandMap = $this->getServer()->getCommandMap();
         
-        $loginCmd = new LoginCommand($this);
-        $commandMap->register("liteauth", $loginCmd);
-        
-        $regCmd = new RegisterCommand($this);
-        $commandMap->register("liteauth", $regCmd);
-        
-        $captchaCmd = new CaptchaCommand($this);
-        $commandMap->register("liteauth", $captchaCmd);
-        
-        $authCmd = new AuthCommand($this);
-        $commandMap->register("liteauth", $authCmd);
+        $commandMap->register("liteauth", new LoginCommand($this));
+        $commandMap->register("liteauth", new RegisterCommand($this));
+        $commandMap->register("liteauth", new CaptchaCommand($this));
+        $commandMap->register("liteauth", new AuthCommand($this));
     }
 
     private function registerListeners() {
@@ -122,5 +106,29 @@ class LiteAuthPlugin extends PluginBase {
 
     public function getMessageManager(): MessageManager {
         return $this->messageManager;
+    }
+
+    public function getConfig(): Config {
+        return $this->config;
+    }
+
+    public function getMessages(): Config {
+        return $this->messages;
+    }
+
+    public function getConfigValue(string $key, $default = null) {
+        $value = $this->config->get($key);
+        return $value !== null ? $value : $default;
+    }
+
+    public function reloadConfig(): bool {
+        try {
+            $this->config = new Config($this->getDataFolder() . "config.yml", Config::YAML);
+            $this->messages = new Config($this->getDataFolder() . "messages.yml", Config::YAML);
+            return true;
+        } catch (\Exception $e) {
+            $this->getLogger()->error("Failed to reload config: " . $e->getMessage());
+            return false;
+        }
     }
 }

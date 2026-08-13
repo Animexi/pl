@@ -11,119 +11,132 @@ use LiteAuth\LiteAuthPlugin;
 
 class AuthCommand extends Command {
 
-    /** @var LiteAuthPlugin */
     private $plugin;
 
     public function __construct(LiteAuthPlugin $plugin) {
-        parent::__construct("auth", "Authentication management commands", "/auth <info|unregister|changepassword|logout|reload>", []);
-        $this->setPermission("liteauth.admin");
+        parent::__construct("auth", "Authentication management", "/auth <info|unregister|changepassword|logout|reload>", []);
         $this->plugin = $plugin;
     }
 
     public function execute(CommandSender $sender, string $commandLabel, array $args): bool {
-        $msg = $this->plugin->getMessageManager();
-
-        // Проверка прав
-        if (!$sender->hasPermission("liteauth.admin")) {
-            $msg->sendPrefix($sender, "§cУ вас нет прав для этой команды.");
-            return true;
-        }
-
         if (count($args) < 1) {
-            $sender->sendMessage("§e§lLITEAUTH §8┃ §7Используйте: §e/auth <info|unregister|changepassword|logout|reload>");
+            $sender->sendMessage("§e§lLITE§f§lAUTH §8┃ §7Используйте: §e/auth <info|unregister|changepassword|logout|reload>");
             return true;
         }
 
         $subCmd = strtolower($args[0]);
 
-        switch ($subCmd) {
-            case "reload":
-                try {
-                    $this->plugin->reloadConfig();
-                    $msg->sendPrefix($sender, "§aКонфигурация успешно перезагружена.");
-                } catch (\Exception $e) {
-                    $msg->sendPrefix($sender, "§cНе удалось загрузить конфигурацию.");
-                    $this->plugin->getLogger()->error("Reload failed: " . $e->getMessage());
-                }
-                break;
+        if ($subCmd === "reload") {
+            if (!$sender->hasPermission("liteauth.reload") && !$sender->isOp()) {
+                $sender->sendMessage("§e§lLITE§f§lAUTH §8┃ §cУ вас нет прав для этой команды.");
+                return true;
+            }
 
-            case "info":
-                if (!isset($args[1])) {
-                    $msg->sendPrefix($sender, "§cИспользуйте: /auth info <player>");
-                    return true;
-                }
-                
-                $targetName = $args[1];
-                $isRegistered = $this->plugin->getStorageManager()->isRegistered($targetName);
-                
-                $status = $isRegistered ? "§aЗарегистрирован" : "§cНе зарегистрирован";
-                $regDate = $isRegistered ? $this->plugin->getStorageManager()->getRegistrationDate($targetName) : null;
-                $lastLogin = $isRegistered ? date("d.m.Y H:i", $this->plugin->getStorageManager()->loadPlayerData($targetName)["last_login"] ?? 0) : "N/A";
-                
-                $regDateStr = $regDate ? date("d.m.Y H:i", $regDate) : "N/A";
-                
-                $message = str_replace(
-                    ["{player}", "{status}", "{registered}", "{regdate}", "{lastlogin}"],
-                    [$targetName, $status, $status, $regDateStr, $lastLogin],
-                    $msg->get("admin-info-header")
-                );
-                $sender->sendMessage($message);
-                break;
-
-            case "unregister":
-                if (!isset($args[1])) {
-                    $msg->sendPrefix($sender, "§cИспользуйте: /auth unregister <player>");
-                    return true;
-                }
-                
-                $targetName = $args[1];
-                if ($this->plugin->getStorageManager()->deleteAccount($targetName)) {
-                    $this->plugin->getAuthManager()->clearPlayerData($targetName);
-                    $msg->send($sender, "admin-unregister-success", ["player" => $targetName]);
-                } else {
-                    $msg->sendPrefix($sender, "§cНе удалось удалить аккаунт.");
-                }
-                break;
-
-            case "changepassword":
-                if (!isset($args[1]) || !isset($args[2])) {
-                    $msg->sendPrefix($sender, "§cИспользуйте: /auth changepassword <player> <newpassword>");
-                    return true;
-                }
-                
-                $targetName = $args[1];
-                $newPassword = $args[2];
-                
-                if (!$this->plugin->getStorageManager()->isRegistered($targetName)) {
-                    $msg->sendPrefix($sender, "§cИгрок не зарегистрирован.");
-                    return true;
-                }
-                
-                $hash = password_hash($newPassword, PASSWORD_DEFAULT);
-                $data = $this->plugin->getStorageManager()->loadPlayerData($targetName);
-                if ($data !== null) {
-                    $data["password"] = $hash;
-                    $this->plugin->getStorageManager()->savePlayerData($targetName, $data);
-                    $msg->send($sender, "admin-changepassword-success", ["player" => $targetName]);
-                }
-                break;
-
-            case "logout":
-                if (!isset($args[1])) {
-                    $msg->sendPrefix($sender, "§cИспользуйте: /auth logout <player>");
-                    return true;
-                }
-                
-                $targetName = $args[1];
-                $this->plugin->getAuthManager()->clearPlayerData($targetName);
-                $msg->send($sender, "admin-logout-success", ["player" => $targetName]);
-                break;
-
-            default:
-                $sender->sendMessage("§e§lLITEAUTH §8┃ §7Неизвестная подкоманда. Доступные: §einfo, unregister, changepassword, logout, reload");
-                break;
+            if ($this->plugin->reloadConfig()) {
+                $this->plugin->getMessageManager()->send($sender, "admin-reload-success");
+            } else {
+                $this->plugin->getMessageManager()->send($sender, "admin-reload-error");
+            }
+            return true;
         }
 
+        if (!$sender instanceof Player) {
+            if ($subCmd === "info" && isset($args[1])) {
+                $targetName = $args[1];
+                $this->showInfo($sender, $targetName);
+                return true;
+            }
+            $sender->sendMessage("§cЭта команда доступна только игрокам.");
+            return true;
+        }
+
+        if ($subCmd === "info") {
+            if (!$sender->hasPermission("liteauth.info") && !$sender->isOp()) {
+                $sender->sendMessage("§e§lLITE§f§lAUTH §8┃ §cУ вас нет прав для этой команды.");
+                return true;
+            }
+            
+            $targetName = isset($args[1]) ? $args[1] : $sender->getName();
+            $this->showInfo($sender, $targetName);
+            return true;
+        }
+
+        if ($subCmd === "unregister") {
+            if (!$sender->hasPermission("liteauth.unregister") && !$sender->isOp()) {
+                $sender->sendMessage("§e§lLITE§f§lAUTH §8┃ §cУ вас нет прав для этой команды.");
+                return true;
+            }
+
+            if (!isset($args[1])) {
+                $sender->sendMessage("§e§lLITE§f§lAUTH §8┃ §7Используйте: §e/auth unregister <player>");
+                return true;
+            }
+
+            $targetName = $args[1];
+            if ($this->plugin->getStorageManager()->deletePlayer($targetName)) {
+                $this->plugin->getMessageManager()->send($sender, "admin-unregister-success", ["player" => $targetName]);
+                $this->plugin->getLogger()->info("Account $targetName unregistered by " . $sender->getName());
+            } else {
+                $sender->sendMessage("§e§lLITE§f§lAUTH §8┃ §cАккаунт не найден.");
+            }
+            return true;
+        }
+
+        if ($subCmd === "logout") {
+            if (!$sender->hasPermission("liteauth.admin") && !$sender->isOp()) {
+                $sender->sendMessage("§e§lLITE§f§lAUTH §8┃ §cУ вас нет прав для этой команды.");
+                return true;
+            }
+
+            if (!isset($args[1])) {
+                $sender->sendMessage("§e§lLITE§f§lAUTH §8┃ §7Используйте: §e/auth logout <player>");
+                return true;
+            }
+
+            $target = $this->plugin->getServer()->getPlayer($args[1]);
+            if ($target instanceof Player) {
+                $authManager = $this->plugin->getAuthManager();
+                $authManager->clearSession($target);
+                $authManager->setState($target, \LiteAuth\manager\AuthManager::STATE_AUTH_REQUIRED);
+                $sender->sendMessage("§e§lLITE§f§lAUTH §8┃ §aИгрок §f" . $target->getName() . " §aвышел из аккаунта.");
+            } else {
+                $sender->sendMessage("§e§lLITE§f§lAUTH §8┃ §cИгрок не найден.");
+            }
+            return true;
+        }
+
+        $sender->sendMessage("§e§lLITE§f§lAUTH §8┃ §cНеизвестная подкоманда. Используйте §e/auth reload§c, §e/auth info§c, §e/auth unregister§c, или §e/auth logout§c.");
         return true;
+    }
+
+    private function showInfo(CommandSender $sender, string $playerName) {
+        $storage = $this->plugin->getStorageManager();
+        $authManager = $this->plugin->getAuthManager();
+        
+        $isRegistered = $storage->playerExists($playerName);
+        
+        $target = $this->plugin->getServer()->getPlayer($playerName);
+        $isAuthenticated = false;
+        $hasSession = false;
+        $autoLogin = false;
+
+        if ($target instanceof Player) {
+            $isAuthenticated = $authManager->isAuthenticated($target);
+            $hasSession = $authManager->hasValidSession($target);
+            $autoLogin = $this->plugin->getConfigValue("auto-login", true);
+        }
+
+        $status = $isRegistered ? "§aЗарегистрирован" : "§cНе зарегистрирован";
+        $sessionStr = $hasSession ? "§aАктивна" : "§7Нет";
+        $autoLoginStr = $autoLogin ? "§aВключен" : "§7Отключен";
+
+        $msg = $this->plugin->getMessageManager()->get("admin-info-title", [
+            "player" => $playerName,
+            "status" => $status,
+            "session" => $sessionStr,
+            "autologin" => $autoLoginStr
+        ]);
+
+        $sender->sendMessage($msg);
     }
 }

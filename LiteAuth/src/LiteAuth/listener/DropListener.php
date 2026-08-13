@@ -8,27 +8,26 @@ use pocketmine\event\Listener;
 use pocketmine\event\player\PlayerDropItemEvent;
 use pocketmine\Player;
 use LiteAuth\LiteAuthPlugin;
+use LiteAuth\manager\AuthManager;
 
 class DropListener implements Listener {
 
-    /** @var LiteAuthPlugin */
     private $plugin;
 
     public function __construct(LiteAuthPlugin $plugin) {
         $this->plugin = $plugin;
     }
 
-    public function onDrop(PlayerDropItemEvent $event): void {
+    public function onPlayerDropItem(PlayerDropItemEvent $event) {
         $player = $event->getPlayer();
-        
-        if ($player->hasPermission("liteauth.bypass")) {
+        $authManager = $this->plugin->getAuthManager();
+
+        // Allow dropping if authenticated or has bypass
+        if ($authManager->isAuthenticated($player) || $player->hasPermission("liteauth.bypass")) {
             return;
         }
-        
-        if ($this->plugin->getAuthManager()->isAuthenticated($player)) {
-            return;
-        }
-        
+
+        // Cancel drop for unauthenticated players
         $event->setCancelled();
     }
 }

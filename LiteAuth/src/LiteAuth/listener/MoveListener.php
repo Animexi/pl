@@ -6,43 +6,37 @@ namespace LiteAuth\listener;
 
 use pocketmine\event\Listener;
 use pocketmine\event\player\PlayerMoveEvent;
-use pocketmine\level\Location;
 use pocketmine\Player;
 use LiteAuth\LiteAuthPlugin;
+use LiteAuth\manager\AuthManager;
 
 class MoveListener implements Listener {
 
-    /** @var LiteAuthPlugin */
     private $plugin;
 
     public function __construct(LiteAuthPlugin $plugin) {
         $this->plugin = $plugin;
     }
 
-    public function onMove(PlayerMoveEvent $event): void {
+    public function onPlayerMove(PlayerMoveEvent $event) {
         $player = $event->getPlayer();
-        
-        // Обход для администраторов
-        if ($player->hasPermission("liteauth.bypass")) {
+        $authManager = $this->plugin->getAuthManager();
+
+        // Allow movement if authenticated or has bypass
+        if ($authManager->isAuthenticated($player) || $player->hasPermission("liteauth.bypass")) {
             return;
         }
-        
-        // Проверяем авторизацию
-        if ($this->plugin->getAuthManager()->isAuthenticated($player)) {
-            return;
-        }
-        
-        // Отменяем движение - телепортируем обратно
+
+        // Cancel movement for unauthenticated players
         $from = $event->getFrom();
         $to = $event->getTo();
-        
-        if ($to !== null && 
-            (abs($from->x - $to->x) > 0.1 || 
-             abs($from->y - $to->y) > 0.1 || 
-             abs($from->z - $to->z) > 0.1)) {
-            
-            $player->teleport(new Location($from->x, $from->y, $from->z, $from->yaw, $from->pitch, $from->getLevel()));
+
+        // Only cancel if position actually changed
+        if ($from->x !== $to->x || $from->y !== $to->y || $from->z !== $to->z) {
             $event->setCancelled();
+            
+            // Teleport back to from position
+            $player->teleport($from);
         }
     }
 }

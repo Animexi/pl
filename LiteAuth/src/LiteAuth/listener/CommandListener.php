@@ -8,51 +8,54 @@ use pocketmine\event\Listener;
 use pocketmine\event\player\PlayerCommandPreprocessEvent;
 use pocketmine\Player;
 use LiteAuth\LiteAuthPlugin;
+use LiteAuth\manager\AuthManager;
 
 class CommandListener implements Listener {
 
-    /** @var LiteAuthPlugin */
     private $plugin;
     
-    /** @var array<string> */
-    private $allowedCommands = [
-        'login',
-        'l',
-        'register',
-        'reg',
-        'captcha',
-        'help',
-        '?',
-        'auth'
+    // Commands allowed before authentication
+    private static $allowedCommands = [
+        "login",
+        "l",
+        "register", 
+        "reg",
+        "captcha",
+        "help",
+        "auth"
     ];
 
     public function __construct(LiteAuthPlugin $plugin) {
         $this->plugin = $plugin;
     }
 
-    public function onCommand(PlayerCommandPreprocessEvent $event): void {
+    public function onPlayerCommand(PlayerCommandPreprocessEvent $event) {
         $player = $event->getPlayer();
-        
-        if ($player->hasPermission("liteauth.bypass")) {
+        $authManager = $this->plugin->getAuthManager();
+
+        // Allow commands if authenticated or has bypass
+        if ($authManager->isAuthenticated($player) || $player->hasPermission("liteauth.bypass")) {
             return;
         }
-        
-        if ($this->plugin->getAuthManager()->isAuthenticated($player)) {
-            return;
-        }
-        
+
         $message = $event->getMessage();
-        if (strpos($message, '/') === 0) {
-            $message = substr($message, 1);
+        $args = explode(" ", trim($message));
+        $cmd = strtolower(ltrim($args[0], "/"));
+
+        // Check if command is allowed
+        if (in_array($cmd, self::$allowedCommands)) {
+            return;
         }
+
+        // Block other commands
+        $event->setCancelled();
         
-        $parts = explode(' ', $message);
-        $cmd = strtolower(array_shift($parts));
+        static $notifiedPlayers = [];
+        $name = strtolower($player->getName());
         
-        // Разрешаем только команды авторизации
-        if (!in_array($cmd, $this->allowedCommands)) {
-            $event->setCancelled();
-            $this->plugin->getMessageManager()->sendPrefix($player, "§cСначала необходимо авторизоваться.");
+        if (!isset($notifiedPlayers[$name])) {
+            $this->plugin->getMessageManager()->send($player, "error-command-blocked");
+            $notifiedPlayers[$name] = true;
         }
     }
 }

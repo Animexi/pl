@@ -8,28 +8,35 @@ use pocketmine\event\Listener;
 use pocketmine\event\player\PlayerChatEvent;
 use pocketmine\Player;
 use LiteAuth\LiteAuthPlugin;
+use LiteAuth\manager\AuthManager;
 
 class ChatListener implements Listener {
 
-    /** @var LiteAuthPlugin */
     private $plugin;
 
     public function __construct(LiteAuthPlugin $plugin) {
         $this->plugin = $plugin;
     }
 
-    public function onChat(PlayerChatEvent $event): void {
+    public function onPlayerChat(PlayerChatEvent $event) {
         $player = $event->getPlayer();
-        
-        if ($player->hasPermission("liteauth.bypass")) {
+        $authManager = $this->plugin->getAuthManager();
+
+        // Allow chat if authenticated or has bypass
+        if ($authManager->isAuthenticated($player) || $player->hasPermission("liteauth.bypass")) {
             return;
         }
-        
-        if ($this->plugin->getAuthManager()->isAuthenticated($player)) {
-            return;
-        }
-        
+
+        // Cancel chat for unauthenticated players
         $event->setCancelled();
-        $this->plugin->getMessageManager()->sendPrefix($player, "§cСначала необходимо авторизоваться.");
+        
+        // Send error message (but not too spammy - only once per join session)
+        static $notifiedPlayers = [];
+        $name = strtolower($player->getName());
+        
+        if (!isset($notifiedPlayers[$name])) {
+            $this->plugin->getMessageManager()->send($player, "error-chat-blocked");
+            $notifiedPlayers[$name] = true;
+        }
     }
 }

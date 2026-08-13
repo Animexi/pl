@@ -11,12 +11,10 @@ use LiteAuth\LiteAuthPlugin;
 
 class LoginCommand extends Command {
 
-    /** @var LiteAuthPlugin */
     private $plugin;
 
     public function __construct(LiteAuthPlugin $plugin) {
         parent::__construct("login", "Login to your account", "/login <password>", ["l"]);
-        $this->setPermission("liteauth.login");
         $this->plugin = $plugin;
     }
 
@@ -26,32 +24,40 @@ class LoginCommand extends Command {
             return true;
         }
 
-        $player = $sender;
-        $msg = $this->plugin->getMessageManager();
-
-        // Проверка на уже авторизованных
-        if ($this->plugin->getAuthManager()->isAuthenticated($player)) {
-            $msg->send($player, "already-authenticated");
-            return true;
-        }
-
-        // Проверка аргументов
         if (count($args) < 1) {
-            $msg->send($player, "command-usage", ["usage" => "§e/login <пароль>"]);
+            $this->plugin->getMessageManager()->send($sender, "usage-login");
             return true;
         }
 
-        $password = implode(' ', $args);
+        $authManager = $this->plugin->getAuthManager();
         
-        // Проверка регистрации
-        if (!$this->plugin->getStorageManager()->isRegistered($player->getName())) {
-            $msg->send($player, "login-not-registered");
+        if (!$authManager->isRegistered($sender)) {
+            $this->plugin->getMessageManager()->send($sender, "error-not-registered");
             return true;
         }
 
-        // Выполняем вход
-        $this->plugin->getAuthManager()->login($player, $password);
+        if ($authManager->isAuthenticated($sender)) {
+            $sender->sendMessage("§e§lLITE§f§lAUTH §8┃ §cВы уже авторизованы.");
+            return true;
+        }
+
+        $password = implode(" ", $args);
         
+        if ($authManager->login($sender, $password)) {
+            $this->plugin->getMessageManager()->send($sender, "login-success", ["player" => $sender->getName()]);
+        } else {
+            $authManager->incrementLoginAttempts($sender);
+            $attempts = $authManager->getLoginAttempts($sender);
+            $maxAttempts = $this->plugin->getConfigValue("max-login-attempts", 5);
+            
+            if ($attempts >= $maxAttempts) {
+                $this->plugin->getMessageManager()->send($sender, "error-max-attempts");
+                $sender->kick("Слишком много неудачных попыток входа.", false);
+            } else {
+                $this->plugin->getMessageManager()->send($sender, "error-invalid-password");
+            }
+        }
+
         return true;
     }
 }

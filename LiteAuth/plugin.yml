@@ -3,7 +3,7 @@ version: 1.0.0
 api: ["3.0.0", "3.0.1", "3.0.2"]
 main: LiteAuth\LiteAuthPlugin
 author: LiteAuth Team
-description: Advanced authentication system for Minecraft PE 1.1.5 (LiteCore)
+description: Advanced authentication system for Minecraft PE 1.1.5
 
 commands:
   login:
@@ -13,14 +13,14 @@ commands:
     description: Register a new account
     aliases: [reg]
   captcha:
-    description: Solve captcha verification
+    description: Solve captcha challenge
   auth:
-    description: Authentication management commands
+    description: Authentication management
 
 permissions:
   liteauth.admin:
     description: Admin access to LiteAuth commands
     default: op
   liteauth.bypass:
-    description: Bypass authentication checks
+    description: Bypass authentication requirements
     default: op

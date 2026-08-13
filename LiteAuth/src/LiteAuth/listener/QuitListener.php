@@ -11,19 +11,17 @@ use LiteAuth\LiteAuthPlugin;
 
 class QuitListener implements Listener {
 
-    /** @var LiteAuthPlugin */
     private $plugin;
 
     public function __construct(LiteAuthPlugin $plugin) {
         $this->plugin = $plugin;
     }
 
-    public function onQuit(PlayerQuitEvent $event): void {
+    public function onPlayerQuit(PlayerQuitEvent $event) {
         $player = $event->getPlayer();
-        $name = $player->getName();
-        
-        // Очищаем временные данные
-        $this->plugin->getAuthManager()->clearPlayerData($name);
-        $this->plugin->getStorageManager()->clearCache($name);
+        $authManager = $this->plugin->getAuthManager();
+
+        // Cleanup player data from memory
+        $authManager->cleanupPlayer($player);
     }
 }

@@ -1,0 +1,41 @@
+# LiteAuth Configuration
+
+# Password settings
+min-password-length: 6
+max-password-length: 32
+
+# Authentication timeout (seconds)
+auth-timeout: 60
+
+# Login attempts limit
+max-login-attempts: 5
+login-delay: 3
+
+# Captcha settings
+captcha-enabled: true
+captcha-attempts: 3
+captcha-timeout: 120
+
+# Auto-login settings
+auto-login: true
+session-time: 86400
+session-by-ip: false
+
+# Registration settings
+registration-enabled: true
+max-registrations-per-ip: 3
+
+# Kick on timeout
+kick-on-timeout: true
+
+# Password blacklist
+password-blacklist:
+  - "123456"
+  - "password"
+  - "qwerty"
+  - "123123"
+  - "admin"
+  - "server"
+
+# Debug mode
+debug: false
