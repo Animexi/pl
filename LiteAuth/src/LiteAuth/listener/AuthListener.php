@@ -37,8 +37,8 @@ class AuthListener implements Listener {
         // Инициализация состояния игрока
         $this->authManager->initializePlayer($player);
         
-        // Проверка существования аккаунта
-        if ($this->authManager->isRegistered($playerName)) {
+        // Проверка существования аккаунта (передаем объект Player)
+        if ($this->authManager->isRegistered($player)) {
             // Игрок зарегистрирован - проверяем сессию для авто-логина
             if ($this->authManager->checkAutoLogin($player)) {
                 // Авто-логин успешен
@@ -54,7 +54,7 @@ class AuthListener implements Listener {
                 $this->messageManager->sendMessage($player, "§e§lLITE§f§lAUTH §8┃ §aАвтоматическая авторизация выполнена.");
             } else {
                 // Требуется ввод пароля
-                $this->authManager->setState($playerName, \LiteAuth\model\AuthState::AUTH_REQUIRED);
+                $this->authManager->setStateByName($playerName, \LiteAuth\model\AuthState::AUTH_REQUIRED);
                 
                 $this->messageManager->sendBoxedMessage(
                     $player,
@@ -72,7 +72,7 @@ class AuthListener implements Listener {
             }
         } else {
             // Игрок не зарегистрирован - показываем сообщение о регистрации
-            $this->authManager->setState($playerName, \LiteAuth\model\AuthState::UNREGISTERED);
+            $this->authManager->setStateByName($playerName, \LiteAuth\model\AuthState::UNREGISTERED);
             
             $this->messageManager->sendBoxedMessage(
                 $player,

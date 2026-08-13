@@ -245,21 +245,43 @@ class AuthManager {
     }
     
     /**
-     * Проверить, зарегистрирован ли игрок
+     * Проверить, авторизован ли игрок (по имени)
+     * @param string $playerName
+     * @return bool
+     */
+    public function isAuthenticatedByName($playerName) {
+        $normalizedName = strtolower($playerName);
+        return isset($this->playerStatesByName[$normalizedName]) && 
+               $this->playerStatesByName[$normalizedName] === AuthState::LOGGED_IN;
+    }
+    
+    /**
+     * Проверить, авторизован ли игрок (по объекту)
+     * @param Player $player
+     * @return bool
+     */
+    public function isAuthenticated(Player $player) {
+        return $this->getState($player) === AuthState::LOGGED_IN;
+    }
+    
+    /**
+     * Проверить, зарегистрирован ли игрок (по имени)
+     * @param string $playerName
+     * @return bool
+     */
+    public function isRegisteredByName($playerName) {
+        $normalizedName = strtolower($playerName);
+        return isset($this->playerStatesByName[$normalizedName]) && 
+               $this->playerStatesByName[$normalizedName] !== AuthState::UNREGISTERED;
+    }
+    
+    /**
+     * Проверить, зарегистрирован ли игрок (по объекту)
      * @param Player $player
      * @return bool
      */
     public function isRegistered(Player $player) {
         return $this->getState($player) !== AuthState::UNREGISTERED;
-    }
-    
-    /**
-     * Проверить, авторизован ли игрок
-     * @param Player $player
-     * @return bool
-     */
-    public function isLoggedIn(Player $player) {
-        return $this->getState($player) === AuthState::LOGGED_IN;
     }
     
     /**
@@ -1051,6 +1073,14 @@ class AuthManager {
         $sender->sendMessage("  §7Активна: §f" . ($isValid ? "§aДа" : "§cНет"));
         $sender->sendMessage("  §7Время создания: §f" . ($sessionTime > 0 ? date("Y-m-d H:i:s", $sessionTime) : "Нет данных"));
         $sender->sendMessage("  §7IP сессии: §f{$sessionIp}");
-        $sender->sendMessage("  §7Требование IP: §f" . ($this->configManager->isSessionByIpEnabled() ? "Да" : "Нет"));
+        $sender->sendMessage("  §7Требование IP: §f" . ($this->configManager->isSessionByIp() ? "Да" : "Нет"));
+    }
+    
+    /**
+     * Получить плагин
+     * @return LiteAuthPlugin
+     */
+    public function getPlugin() {
+        return $this->plugin;
     }
 }

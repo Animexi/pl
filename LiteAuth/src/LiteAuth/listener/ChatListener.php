@@ -33,7 +33,7 @@ class ChatListener implements Listener {
             return;
         }
         
-        if ($this->authManager->isAuthenticated($playerName)) {
+        if ($this->authManager->isAuthenticated($player)) {
             return;
         }
         
@@ -41,9 +41,9 @@ class ChatListener implements Listener {
         $event->setCancelled();
         
         // Отправляем сообщение о необходимости авторизации (не спамим)
-        $state = $this->authManager->getState($playerName);
+        $state = $this->authManager->getStateByName($playerName);
         if ($state !== \LiteAuth\model\AuthState::CHAT_BLOCKED_INFO) {
-            $this->authManager->setState($playerName, \LiteAuth\model\AuthState::CHAT_BLOCKED_INFO);
+            $this->authManager->setStateByName($playerName, \LiteAuth\model\AuthState::CHAT_BLOCKED_INFO);
             $player->sendMessage("§e§lLITE§f§lAUTH §8┃ §cСначала необходимо авторизоваться.");
         }
     }

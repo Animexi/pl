@@ -1,20 +1,20 @@
+```
 # Compiled and build artifacts
 *.pyc
 __pycache__/
 *.o
 *.obj
-*.class
-*.exe
-*.dll
-*.so
-*.a
-*.out
+dist/
+build/
+target/
 
 # Dependencies
 node_modules/
 vendor/
-composer.lock
-*.lock
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.coverage
 
 # Logs and temp files
 *.log
@@ -33,35 +33,11 @@ composer.lock
 *.swp
 *.swo
 
-# Build and distribution
-dist/
-build/
-target/
-*.tar
-*.zip
-*.gz
-*.bz2
-*.xz
-*.7z
-*.rar
-*.zst
-
-# Coverage and testing
-coverage/
-htmlcov/
-.coverage
-*.cover
-criterion/
-
-# OS generated files
+# System files
 .DS_Store
 Thumbs.db
 
-# Cache directories
-.cache/
-.mypy_cache/
-.pytest_cache/
-.gradle/
-.julia/
-zig-cache/
-zig-out/
+# Coverage
+coverage/
+htmlcov/
+```
