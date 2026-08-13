@@ -36,7 +36,7 @@ class MoveListener implements Listener {
         }
         
         // Пропуск для авторизованных игроков
-        if ($this->authManager->isAuthenticated($playerName)) {
+        if ($this->authManager->isAuthenticated($player)) {
             return;
         }
         

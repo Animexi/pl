@@ -33,7 +33,7 @@ class DropListener implements Listener {
             return;
         }
         
-        if ($this->authManager->isAuthenticated($playerName)) {
+        if ($this->authManager->isAuthenticated($player)) {
             return;
         }
         

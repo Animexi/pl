@@ -26,7 +26,7 @@ class QuitListener implements Listener {
         $this->authManager->cleanupPlayer($playerName);
         
         // Сохранение данных авторизованного игрока
-        if ($this->authManager->isAuthenticated($playerName)) {
+        if ($this->authManager->isAuthenticated($player)) {
             $this->authManager->savePlayerSession($player);
         }
     }
