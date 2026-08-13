@@ -5,52 +5,48 @@ namespace LiteAuth\command;
 use pocketmine\command\Command;
 use pocketmine\command\CommandSender;
 use pocketmine\Player;
-use pocketmine\command\PluginIdentifiableCommand;
-use pocketmine\plugin\Plugin;
-
+use pocketmine\utils\TextFormat;
+use LiteAuth\LiteAuthPlugin;
 use LiteAuth\manager\AuthManager;
-use LiteAuth\util\MessageManager;
 
-/**
- * Команда /login
- */
-class LoginCommand extends Command implements PluginIdentifiableCommand {
+class LoginCommand extends Command {
     
-    /** @var AuthManager */
+    private $plugin;
     private $authManager;
     
-    /** @var MessageManager */
-    private $messageManager;
-    
-    public function __construct(AuthManager $authManager, MessageManager $messageManager) {
-        parent::__construct("login", "Авторизация на сервере", "/login <пароль>", array("l"));
+    public function __construct(LiteAuthPlugin $plugin, AuthManager $authManager) {
+        parent::__construct("login", "Login to your account", "/login <password>", ["l"]);
         $this->setPermission("liteauth.login");
-        
+        $this->plugin = $plugin;
         $this->authManager = $authManager;
-        $this->messageManager = $messageManager;
     }
     
-    public function execute(CommandSender $sender, string $commandLabel, array $args) : bool {
+    public function execute(CommandSender $sender, $label, array $args) {
         if (!$sender instanceof Player) {
-            $sender->sendMessage("§e§lLITE§f§lAUTH §8┃ §cЭта команда доступна только игрокам.");
+            $sender->sendMessage(TextFormat::RED . "Эту команду можно использовать только в игре.");
             return true;
         }
         
-        // Проверка количества аргументов
+        if (!$this->authManager->isRegistered($sender)) {
+            $sender->sendMessage($this->authManager->formatMessage("not-registered"));
+            return true;
+        }
+        
         if (count($args) < 1) {
-            $this->messageManager->send($sender, "login.usage");
+            $sender->sendMessage($this->authManager->formatBoxedMessage([
+                "§e§lLITEAUTH",
+                "",
+                "§cНеверный формат команды.",
+                "",
+                "§7Используйте:",
+                "§e/login §f<пароль>",
+                ""
+            ]));
             return true;
         }
         
-        $password = implode(" ", $args);
-        
-        // Авторизация
+        $password = $args[0];
         $this->authManager->login($sender, $password);
-        
         return true;
-    }
-    
-    public function getPlugin() {
-        return $this->authManager->getPlugin();
     }
 }

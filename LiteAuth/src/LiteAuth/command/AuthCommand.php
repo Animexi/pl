@@ -5,160 +5,165 @@ namespace LiteAuth\command;
 use pocketmine\command\Command;
 use pocketmine\command\CommandSender;
 use pocketmine\Player;
-use pocketmine\command\PluginIdentifiableCommand;
-
+use pocketmine\utils\TextFormat;
+use LiteAuth\LiteAuthPlugin;
 use LiteAuth\manager\AuthManager;
-use LiteAuth\util\MessageManager;
-use LiteAuth\util\ConfigManager;
 
-/**
- * Команда /auth (административная и информационная)
- */
-class AuthCommand extends Command implements PluginIdentifiableCommand {
+class AuthCommand extends Command {
     
-    /** @var AuthManager */
+    private $plugin;
     private $authManager;
     
-    /** @var MessageManager */
-    private $messageManager;
-    
-    /** @var ConfigManager */
-    private $configManager;
-    
-    public function __construct(AuthManager $authManager, MessageManager $messageManager, ConfigManager $configManager) {
-        parent::__construct("auth", "Управление авторизацией", "/auth <info|unregister|changepassword|logout|reload|captcha|session>", array());
+    public function __construct(LiteAuthPlugin $plugin, AuthManager $authManager) {
+        parent::__construct("auth", "Administration commands", "/auth <subcommand>", []);
         $this->setPermission("liteauth.admin");
-        
+        $this->plugin = $plugin;
         $this->authManager = $authManager;
-        $this->messageManager = $messageManager;
-        $this->configManager = $configManager;
     }
     
-    public function execute(CommandSender $sender, string $commandLabel, array $args) : bool {
-        // Если нет аргументов - показать статус текущего игрока
+    public function execute(CommandSender $sender, $label, array $args) {
         if (count($args) < 1) {
-            if (!$sender instanceof Player) {
-                $sender->sendMessage("§e§lLITE§f§lAUTH §8┃ §cИспользуйте /auth <info|unregister|changepassword|logout|reload|captcha|session>");
-                return true;
-            }
-            
-            $this->authManager->showAuthStatus($sender);
+            $sender->sendMessage($this->authManager->formatBoxedMessage([
+                "§e§lLITEAUTH",
+                "",
+                "§cНеверный формат команды.",
+                "",
+                "§7Доступные подкоманды:",
+                "§e/auth info §f<player>",
+                "§e/auth unregister §f<player>",
+                "§e/auth changepassword §f<player> <password>",
+                "§e/auth logout §f<player>",
+                "§e/auth reload",
+                ""
+            ]));
             return true;
         }
         
         $subCommand = strtolower($args[0]);
         
-        // Обработка подкоманд
         switch ($subCommand) {
             case "info":
-                if (!$sender->hasPermission("liteauth.info")) {
-                    $sender->sendMessage("§e§lLITE§f§lAUTH §8┃ §cНедостаточно прав.");
-                    return true;
-                }
-                
-                if (!isset($args[1])) {
-                    $sender->sendMessage("§e§lLITE§f§lAUTH §8┃ §cИспользуйте /auth info <игрок>");
-                    return true;
-                }
-                
-                $targetName = $args[1];
-                $this->authManager->showPlayerInfo($sender, $targetName);
-                break;
-                
+                return $this->handleInfo($sender, $args);
             case "unregister":
-                if (!$sender->hasPermission("liteauth.unregister")) {
-                    $sender->sendMessage("§e§lLITE§f§lAUTH §8┃ §cНедостаточно прав.");
-                    return true;
-                }
-                
-                if (!isset($args[1])) {
-                    $sender->sendMessage("§e§lLITE§f§lAUTH §8┃ §cИспользуйте /auth unregister <игрок>");
-                    return true;
-                }
-                
-                $targetName = $args[1];
-                $this->authManager->unregisterPlayer($sender, $targetName);
-                break;
-                
+                return $this->handleUnregister($sender, $args);
             case "changepassword":
-                if (!$sender->hasPermission("liteauth.changepassword")) {
-                    $sender->sendMessage("§e§lLITE§f§lAUTH §8┃ §cНедостаточно прав.");
-                    return true;
-                }
-                
-                if (!isset($args[1]) || !isset($args[2])) {
-                    $sender->sendMessage("§e§lLITE§f§lAUTH §8┃ §cИспользуйте /auth changepassword <игрок> <новый-пароль>");
-                    return true;
-                }
-                
-                $targetName = $args[1];
-                $newPassword = $args[2];
-                $this->authManager->changePassword($sender, $targetName, $newPassword);
-                break;
-                
+                return $this->handleChangePassword($sender, $args);
             case "logout":
-                if (!$sender->hasPermission("liteauth.logout")) {
-                    $sender->sendMessage("§e§lLITE§f§lAUTH §8┃ §cНедостаточно прав.");
-                    return true;
-                }
-                
-                if (!isset($args[1])) {
-                    $sender->sendMessage("§e§lLITE§f§lAUTH §8┃ §cИспользуйте /auth logout <игрок>");
-                    return true;
-                }
-                
-                $targetName = $args[1];
-                $this->authManager->logoutPlayer($sender, $targetName);
-                break;
-                
+                return $this->handleLogout($sender, $args);
             case "reload":
-                if (!$sender->hasPermission("liteauth.reload")) {
-                    $sender->sendMessage("§e§lLITE§f§lAUTH §8┃ §cНедостаточно прав.");
-                    return true;
-                }
-                
-                $this->authManager->reloadConfig($sender);
-                break;
-                
-            case "captcha":
-                if (!$sender->hasPermission("liteauth.admin")) {
-                    $sender->sendMessage("§e§lLITE§f§lAUTH §8┃ §cНедостаточно прав.");
-                    return true;
-                }
-                
-                if (!isset($args[1])) {
-                    $sender->sendMessage("§e§lLITE§f§lAUTH §8┃ §cИспользуйте /auth captcha <игрок>");
-                    return true;
-                }
-                
-                $targetName = $args[1];
-                $this->authManager->forceCaptcha($sender, $targetName);
-                break;
-                
-            case "session":
-                if (!$sender->hasPermission("liteauth.admin")) {
-                    $sender->sendMessage("§e§lLITE§f§lAUTH §8┃ §cНедостаточно прав.");
-                    return true;
-                }
-                
-                if (!isset($args[1])) {
-                    $sender->sendMessage("§e§lLITE§f§lAUTH §8┃ §cИспользуйте /auth session <игрок>");
-                    return true;
-                }
-                
-                $targetName = $args[1];
-                $this->authManager->showSessionInfo($sender, $targetName);
-                break;
-                
+                return $this->handleReload($sender);
             default:
-                $sender->sendMessage("§e§lLITE§f§lAUTH §8┃ §cНеизвестная подкоманда. Используйте /auth для просмотра статуса.");
-                break;
+                $sender->sendMessage($this->authManager->formatMessage("unknown-subcommand"));
+                return true;
+        }
+    }
+    
+    private function handleInfo(CommandSender $sender, array $args) {
+        if (count($args) < 2) {
+            $sender->sendMessage("§e§lLITEAUTH §8┃ §cИспользование: /auth info <player>");
+            return true;
+        }
+        
+        $targetName = strtolower($args[1]);
+        $isRegistered = $this->authManager->getPlugin()->getAuthManager()->isRegistered($targetName);
+        
+        if (!$isRegistered) {
+            $sender->sendMessage("§e§lLITEAUTH §8┃ §7Игрок §f" . $args[1] . " §7не зарегистрирован.");
+            return true;
+        }
+        
+        $storage = $this->authManager->getPlugin()->getAuthManager()->getStorage();
+        $account = $storage->get($targetName);
+        
+        $registeredDate = isset($account["registered"]) ? date("d.m.Y H:i", $account["registered"]) : "N/A";
+        $lastLogin = isset($account["lastlogin"]) ? date("d.m.Y H:i", $account["lastlogin"]) : "N/A";
+        
+        $sender->sendMessage($this->authManager->formatBoxedMessage([
+            "§e§lLITEAUTH",
+            "",
+            "§7Информация об аккаунте:",
+            "§f" . $args[1],
+            "",
+            "§7Зарегистрирован: §a" . $registeredDate,
+            "§7Последний вход: §e" . $lastLogin,
+            ""
+        ]));
+        
+        return true;
+    }
+    
+    private function handleUnregister(CommandSender $sender, array $args) {
+        if (count($args) < 2) {
+            $sender->sendMessage("§e§lLITEAUTH §8┃ §cИспользование: /auth unregister <player>");
+            return true;
+        }
+        
+        $targetName = strtolower($args[1]);
+        $storage = $this->authManager->getPlugin()->getAuthManager()->getStorage();
+        
+        if (!$storage->exists($targetName)) {
+            $sender->sendMessage("§e§lLITEAUTH §8┃ §7Игрок §f" . $args[1] . " §7не зарегистрирован.");
+            return true;
+        }
+        
+        $storage->delete($targetName);
+        $this->authManager->log("Account unregistered by admin: " . $args[1] . " by " . ($sender instanceof Player ? $sender->getName() : "Console"));
+        $sender->sendMessage("§e§lLITEAUTH §8┃ §aАккаунт игрока §f" . $args[1] . " §aудалён.");
+        
+        return true;
+    }
+    
+    private function handleChangePassword(CommandSender $sender, array $args) {
+        if (count($args) < 3) {
+            $sender->sendMessage("§e§lLITEAUTH §8┃ §cИспользование: /auth changepassword <player> <password>");
+            return true;
+        }
+        
+        $targetName = strtolower($args[1]);
+        $newPassword = $args[2];
+        $storage = $this->authManager->getPlugin()->getAuthManager()->getStorage();
+        
+        if (!$storage->exists($targetName)) {
+            $sender->sendMessage("§e§lLITEAUTH §8┃ §7Игрок §f" . $args[1] . " §7не зарегистрирован.");
+            return true;
+        }
+        
+        $account = $storage->get($targetName);
+        $account["password"] = password_hash($newPassword, PASSWORD_DEFAULT);
+        $storage->save($targetName, $account);
+        
+        $this->authManager->log("Password changed by admin: " . $args[1] . " by " . ($sender instanceof Player ? $sender->getName() : "Console"));
+        $sender->sendMessage("§e§lLITEAUTH §8┃ §aПароль изменён для §f" . $args[1] . "§a.");
+        
+        return true;
+    }
+    
+    private function handleLogout(CommandSender $sender, array $args) {
+        if (count($args) < 2) {
+            $sender->sendMessage("§e§lLITEAUTH §8┃ §cИспользование: /auth logout <player>");
+            return true;
+        }
+        
+        $targetName = strtolower($args[1]);
+        $server = $this->authManager->getPlugin()->getServer();
+        $target = $server->getPlayer($args[1]);
+        
+        if ($target instanceof Player) {
+            $this->authManager->setState($target, \LiteAuth\manager\AuthManager::STATE_AUTH_REQUIRED);
+            $target->sendMessage("§e§lLITEAUTH §8┃ §7Вы были вынуждены выйти из аккаунта администратором.");
+            $this->authManager->showLoginMessage($target);
+            $sender->sendMessage("§e§lLITEAUTH §8┃ §aИгрок §f" . $args[1] . " §aвышел из аккаунта.");
+        } else {
+            $sender->sendMessage("§e§lLITEAUTH §8┃ §7Игрок §f" . $args[1] . " §7не в сети.");
         }
         
         return true;
     }
     
-    public function getPlugin() {
-        return $this->authManager->getPlugin();
+    private function handleReload(CommandSender $sender) {
+        $this->authManager->getPlugin()->reloadConfig();
+        $sender->sendMessage("§e§lLITEAUTH §8┃ §aКонфигурация успешно перезагружена.");
+        $this->authManager->log("Configuration reloaded by " . ($sender instanceof Player ? $sender->getName() : "Console"));
+        return true;
     }
 }

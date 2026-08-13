@@ -3,20 +3,22 @@
 namespace LiteAuth\listener;
 
 use pocketmine\event\Listener;
-use pocketmine\event\player\PlayerQuitEvent;
+use pocketmine\event\player\PlayerJoinEvent;
 use LiteAuth\LiteAuthPlugin;
 use LiteAuth\manager\AuthManager;
 
-class QuitListener implements Listener {
+class JoinListener implements Listener {
     
+    private $plugin;
     private $authManager;
     
     public function __construct(LiteAuthPlugin $plugin, AuthManager $authManager) {
+        $this->plugin = $plugin;
         $this->authManager = $authManager;
     }
     
-    public function onPlayerQuit(PlayerQuitEvent $event) {
+    public function onPlayerJoin(PlayerJoinEvent $event) {
         $player = $event->getPlayer();
-        $this->authManager->handleQuit($player);
+        $this->authManager->handleJoin($player);
     }
 }

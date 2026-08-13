@@ -5,43 +5,39 @@ namespace LiteAuth\listener;
 use pocketmine\event\Listener;
 use pocketmine\event\player\PlayerMoveEvent;
 use pocketmine\level\Location;
+use LiteAuth\LiteAuthPlugin;
 use LiteAuth\manager\AuthManager;
-use LiteAuth\util\ConfigManager;
 
 class MoveListener implements Listener {
     
-    /** @var AuthManager */
+    private $plugin;
     private $authManager;
     
-    /** @var ConfigManager */
-    private $configManager;
-    
-    public function __construct(AuthManager $authManager, ConfigManager $configManager) {
+    public function __construct(LiteAuthPlugin $plugin, AuthManager $authManager) {
+        $this->plugin = $plugin;
         $this->authManager = $authManager;
-        $this->configManager = $configManager;
     }
     
-    /**
-     * @param PlayerMoveEvent $event
-     * @priority HIGHEST
-     * @ignoreCancelled true
-     */
     public function onPlayerMove(PlayerMoveEvent $event) {
         $player = $event->getPlayer();
-        $playerName = $player->getName();
         
-        // Пропуск для администраторов с bypass
-        if ($player->hasPermission("liteauth.bypass")) {
-            return;
-        }
-        
-        // Пропуск для авторизованных игроков
         if ($this->authManager->isAuthenticated($player)) {
             return;
         }
         
-        // Блокировка движения - возвращаем на исходную позицию
+        if ($this->authManager->hasPermission($player, "liteauth.bypass")) {
+            return;
+        }
+        
         $from = $event->getFrom();
-        $event->setTo(new Location($from->x, $from->y, $from->z, $from->yaw, $from->pitch, $from->level));
+        $to = $event->getTo();
+        
+        if (abs($from->x - $to->x) < 0.1 && abs($to->y - $from->y) < 0.1 && abs($from->z - $to->z) < 0.1) {
+            return;
+        }
+        
+        $event->setCancelled();
+        
+        $player->teleport(new Location($from->x, $from->y, $from->z, $from->yaw, $from->pitch, $from->getLevel()));
     }
 }

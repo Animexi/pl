@@ -5,56 +5,48 @@ namespace LiteAuth\command;
 use pocketmine\command\Command;
 use pocketmine\command\CommandSender;
 use pocketmine\Player;
-use pocketmine\command\PluginIdentifiableCommand;
-
+use pocketmine\utils\TextFormat;
+use LiteAuth\LiteAuthPlugin;
 use LiteAuth\manager\AuthManager;
-use LiteAuth\util\MessageManager;
-use LiteAuth\util\ConfigManager;
 
-/**
- * Команда /captcha
- */
-class CaptchaCommand extends Command implements PluginIdentifiableCommand {
+class CaptchaCommand extends Command {
     
-    /** @var AuthManager */
+    private $plugin;
     private $authManager;
     
-    /** @var MessageManager */
-    private $messageManager;
-    
-    /** @var ConfigManager */
-    private $configManager;
-    
-    public function __construct(AuthManager $authManager, MessageManager $messageManager, ConfigManager $configManager) {
-        parent::__construct("captcha", "Подтверждение капчи", "/captcha <ответ>", array());
+    public function __construct(LiteAuthPlugin $plugin, AuthManager $authManager) {
+        parent::__construct("captcha", "Solve captcha challenge", "/captcha <answer>");
         $this->setPermission("liteauth.captcha");
-        
+        $this->plugin = $plugin;
         $this->authManager = $authManager;
-        $this->messageManager = $messageManager;
-        $this->configManager = $configManager;
     }
     
-    public function execute(CommandSender $sender, string $commandLabel, array $args) : bool {
+    public function execute(CommandSender $sender, $label, array $args) {
         if (!$sender instanceof Player) {
-            $sender->sendMessage("§e§lLITE§f§lAUTH §8┃ §cЭта команда доступна только игрокам.");
+            $sender->sendMessage(TextFormat::RED . "Эту команду можно использовать только в игре.");
             return true;
         }
         
-        // Если нет аргументов - показать новую капчу
+        if (!$this->authManager->needsCaptcha($sender)) {
+            $sender->sendMessage($this->authManager->formatMessage("no-captcha-active"));
+            return true;
+        }
+        
         if (count($args) < 1) {
-            $this->authManager->showCaptcha($sender);
+            $sender->sendMessage($this->authManager->formatBoxedMessage([
+                "§e§lLITEAUTH",
+                "",
+                "§cНеверный формат команды.",
+                "",
+                "§7Используйте:",
+                "§e/captcha §f<число>",
+                ""
+            ]));
             return true;
         }
         
-        $answer = intval($args[0]);
-        
-        // Проверка капчи
+        $answer = $args[0];
         $this->authManager->checkCaptcha($sender, $answer);
-        
         return true;
-    }
-    
-    public function getPlugin() {
-        return $this->authManager->getPlugin();
     }
 }
