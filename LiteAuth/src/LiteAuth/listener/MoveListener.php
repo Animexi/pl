@@ -42,6 +42,6 @@ class MoveListener implements Listener {
         
         // Блокировка движения - возвращаем на исходную позицию
         $from = $event->getFrom();
-        $event->setTo(new Location($from->x, $from->y, $from->z, $from->level, $from->yaw, $from->pitch));
+        $event->setTo(new Location($from->x, $from->y, $from->z, $from->yaw, $from->pitch, $from->level));
     }
 }
