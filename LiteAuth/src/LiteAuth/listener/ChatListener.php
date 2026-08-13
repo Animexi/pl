@@ -4,47 +4,31 @@ namespace LiteAuth\listener;
 
 use pocketmine\event\Listener;
 use pocketmine\event\player\PlayerChatEvent;
+use LiteAuth\LiteAuthPlugin;
 use LiteAuth\manager\AuthManager;
-use LiteAuth\util\ConfigManager;
 
 class ChatListener implements Listener {
     
-    /** @var AuthManager */
+    private $plugin;
     private $authManager;
     
-    /** @var ConfigManager */
-    private $configManager;
-    
-    public function __construct(AuthManager $authManager, ConfigManager $configManager) {
+    public function __construct(LiteAuthPlugin $plugin, AuthManager $authManager) {
+        $this->plugin = $plugin;
         $this->authManager = $authManager;
-        $this->configManager = $configManager;
     }
     
-    /**
-     * @param PlayerChatEvent $event
-     * @priority HIGHEST
-     * @ignoreCancelled true
-     */
     public function onPlayerChat(PlayerChatEvent $event) {
         $player = $event->getPlayer();
-        $playerName = $player->getName();
-        
-        if ($player->hasPermission("liteauth.bypass")) {
-            return;
-        }
         
         if ($this->authManager->isAuthenticated($player)) {
             return;
         }
         
-        // Блокируем чат для неавторизованных игроков
-        $event->setCancelled();
-        
-        // Отправляем сообщение о необходимости авторизации (не спамим)
-        $state = $this->authManager->getStateByName($playerName);
-        if ($state !== \LiteAuth\model\AuthState::CHAT_BLOCKED_INFO) {
-            $this->authManager->setStateByName($playerName, \LiteAuth\model\AuthState::CHAT_BLOCKED_INFO);
-            $player->sendMessage("§e§lLITE§f§lAUTH §8┃ §cСначала необходимо авторизоваться.");
+        if ($this->authManager->hasPermission($player, "liteauth.bypass")) {
+            return;
         }
+        
+        $event->setCancelled();
+        $player->sendMessage($this->authManager->formatMessage("chat-blocked"));
     }
 }

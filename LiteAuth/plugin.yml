@@ -1,42 +1,46 @@
 name: LiteAuth
 version: 1.0.0
-api: ["3.0.0"]
+api: ["1.12.0", "1.13.0"]
 main: LiteAuth\LiteAuthPlugin
-author: LiteAuth Team
-description: Система регистрации и авторизации для Minecraft PE 1.1.5 (LiteCore)
-load: POSTWORLD
+author: LiteAuthTeam
+description: Production-ready authentication system for Minecraft PE 1.1.5
+
+commands:
+  register:
+    description: Register a new account
+    aliases: [reg]
+    usage: |
+      §cНеверный формат команды.
+      §7Используйте:
+      §e/register §f<пароль> <пароль>
+  login:
+    description: Login to your account
+    aliases: [l]
+    usage: |
+      §cНеверный формат команды.
+      §7Используйте:
+      §e/login §f<пароль>
+  captcha:
+    description: Solve captcha challenge
+    usage: |
+      §cНеверный формат команды.
+      §7Используйте:
+      §e/captcha §f<ответ>
+  auth:
+    description: Administration commands
+    usage: |
+      §cНеверный формат команды.
+      §7Доступные подкоманды:
+      §e/auth info <player>
+      §e/auth unregister <player>
+      §e/auth changepassword <player> <password>
+      §e/auth logout <player>
+      §e/auth reload
 
 permissions:
   liteauth.admin:
-    description: Полный доступ к административным командам LiteAuth
-    default: op
-  liteauth.reload:
-    description: Перезагрузка конфигурации LiteAuth
-    default: op
-  liteauth.unregister:
-    description: Удаление аккаунтов игроков
-    default: op
-  liteauth.changepassword:
-    description: Смена пароля игроку
-    default: op
-  liteauth.info:
-    description: Просмотр информации об аккаунте
-    default: op
-  liteauth.logout:
-    description: Принудительный выход игрока
+    description: Allows using admin commands
     default: op
   liteauth.bypass:
-    description: Обход системы авторизации
-    default: op
-  liteauth.captcha:
-    description: Управление капчей
-    default: op
-  liteauth.session:
-    description: Управление сессиями
-    default: op
-  liteauth.register:
-    description: Регистрация нового аккаунта
-    default: true
-  liteauth.login:
-    description: Вход в аккаунт
-    default: true
+    description: Bypass authentication requirements
+    default: false

@@ -5,115 +5,131 @@ namespace LiteAuth;
 use pocketmine\plugin\PluginBase;
 use pocketmine\event\Listener;
 use pocketmine\utils\Config;
-
+use pocketmine\command\CommandSender;
+use pocketmine\command\Command;
+use pocketmine\Player;
 use LiteAuth\manager\AuthManager;
-use LiteAuth\storage\StorageManager;
-use LiteAuth\util\ConfigManager;
-use LiteAuth\util\MessageManager;
-use LiteAuth\util\PasswordManager;
-use LiteAuth\listener\AuthListener;
+use LiteAuth\storage\YamlStorage;
+use LiteAuth\listener\JoinListener;
 use LiteAuth\listener\QuitListener;
 use LiteAuth\listener\MoveListener;
 use LiteAuth\listener\InteractListener;
 use LiteAuth\listener\DamageListener;
-use LiteAuth\listener\CommandListener;
 use LiteAuth\listener\DropListener;
 use LiteAuth\listener\ChatListener;
+use LiteAuth\listener\CommandListener;
 use LiteAuth\command\RegisterCommand;
 use LiteAuth\command\LoginCommand;
 use LiteAuth\command\CaptchaCommand;
 use LiteAuth\command\AuthCommand;
 
-class LiteAuthPlugin extends PluginBase implements Listener {
+class LiteAuthPlugin extends PluginBase {
     
-    /** @var LiteAuthPlugin|null */
     private static $instance = null;
-    
-    /** @var AuthManager */
     private $authManager;
-    
-    /** @var StorageManager */
-    private $storageManager;
-    
-    /** @var ConfigManager */
-    private $configManager;
-    
-    /** @var MessageManager */
-    private $messageManager;
-    
-    /** @var PasswordManager */
-    private $passwordManager;
+    private $config;
+    private $messages;
     
     public function onEnable() {
         self::$instance = $this;
         
-        // Создание директорий
-        @mkdir($this->getDataFolder() . "players");
+        @mkdir($this->getDataFolder());
         
-        // Сохранение ресурсов если не существуют
-        $this->saveResource("config.yml", false);
-        $this->saveResource("messages.yml", false);
+        $this->saveResource("config.yml");
+        $this->saveResource("messages.yml");
         
-        // Инициализация менеджеров
-        $this->configManager = new ConfigManager($this);
-        $this->messageManager = new MessageManager($this);
-        $this->passwordManager = new PasswordManager();
-        $this->storageManager = new StorageManager($this);
+        $this->config = new Config($this->getDataFolder() . "config.yml", Config::YAML);
+        $this->messages = new Config($this->getDataFolder() . "messages.yml", Config::YAML);
         
-        $this->authManager = new AuthManager(
-            $this,
-            $this->storageManager,
-            $this->configManager,
-            $this->messageManager,
-            $this->passwordManager
-        );
+        $this->validateConfig();
         
-        // Регистрация слушателей событий
+        $storage = new YamlStorage($this->getDataFolder() . "players/");
+        $this->authManager = new AuthManager($this, $storage, $this->config, $this->messages);
+        
+        $this->registerCommands();
         $this->registerListeners();
         
-        // Регистрация команд
-        $this->registerCommands();
-        
-        $this->getLogger()->info("[LiteAuth] Плагин успешно загружен!");
-        $this->getLogger()->info("[LiteAuth] Дизайн: жёлтый + белый + тёмно-серый");
-        
-        if ($this->configManager->isCaptchaEnabled()) {
-            $this->getLogger()->info("[LiteAuth] Система капчи включена.");
+        $this->getLogger()->info("Plugin enabled.");
+        $this->getLogger()->info("Storage loaded.");
+        if ($this->getConfig()->get("captcha-enabled", true)) {
+            $this->getLogger()->info("Captcha system enabled.");
         }
-        
-        if ($this->configManager->isAutoLoginEnabled()) {
-            $this->getLogger()->info("[LiteAuth] Авто-логин включен.");
+        if ($this->getConfig()->get("auto-login", true)) {
+            $this->getLogger()->info("Auto-login enabled.");
         }
     }
     
-    private function registerListeners() {
-        $pluginManager = $this->getServer()->getPluginManager();
+    private function validateConfig() {
+        $defaults = [
+            "min-password-length" => 6,
+            "max-password-length" => 32,
+            "auth-timeout" => 60,
+            "max-login-attempts" => 5,
+            "login-delay" => 1000,
+            "captcha-enabled" => true,
+            "captcha-attempts" => 3,
+            "captcha-timeout" => 60,
+            "auto-login" => true,
+            "session-time" => 86400,
+            "session-by-ip" => false,
+            "registration-enabled" => true,
+            "max-registrations-per-ip" => 3,
+            "kick-on-timeout" => true,
+            "debug" => false,
+            "password-blacklist" => ["123456", "password", "qwerty", "123123", "admin", "server"]
+        ];
         
-        $pluginManager->registerEvents(new AuthListener($this->authManager, $this->messageManager), $this);
-        $pluginManager->registerEvents(new QuitListener($this->authManager), $this);
-        $pluginManager->registerEvents(new MoveListener($this->authManager, $this->configManager), $this);
-        $pluginManager->registerEvents(new InteractListener($this->authManager, $this->configManager), $this);
-        $pluginManager->registerEvents(new DamageListener($this->authManager, $this->configManager), $this);
-        $pluginManager->registerEvents(new CommandListener($this->authManager, $this->configManager), $this);
-        $pluginManager->registerEvents(new DropListener($this->authManager, $this->configManager), $this);
-        $pluginManager->registerEvents(new ChatListener($this->authManager, $this->configManager), $this);
+        foreach ($defaults as $key => $value) {
+            if (!isset($this->config->getAll()[$key])) {
+                $this->config->set($key, $value);
+            }
+        }
+        
+        $minPass = $this->config->get("min-password-length", 6);
+        $maxPass = $this->config->get("max-password-length", 32);
+        if ($minPass > $maxPass || $minPass < 1) {
+            $this->config->set("min-password-length", 6);
+            $this->config->set("max-password-length", 32);
+        }
+        
+        $authTimeout = $this->config->get("auth-timeout", 60);
+        if ($authTimeout <= 0) {
+            $this->config->set("auth-timeout", 60);
+        }
+        
+        $maxAttempts = $this->config->get("max-login-attempts", 5);
+        if ($maxAttempts <= 0) {
+            $this->config->set("max-login-attempts", 5);
+        }
+        
+        $this->config->save();
     }
     
     private function registerCommands() {
         $commandMap = $this->getServer()->getCommandMap();
-        
-        $commandMap->register("liteauth", new RegisterCommand($this->authManager, $this->messageManager));
-        $commandMap->register("liteauth", new LoginCommand($this->authManager, $this->messageManager));
-        $commandMap->register("liteauth", new CaptchaCommand($this->authManager, $this->messageManager, $this->configManager));
-        $commandMap->register("liteauth", new AuthCommand($this->authManager, $this->messageManager, $this->configManager));
+        $commandMap->register("liteauth", new RegisterCommand($this, $this->authManager));
+        $commandMap->register("liteauth", new LoginCommand($this, $this->authManager));
+        $commandMap->register("liteauth", new CaptchaCommand($this, $this->authManager));
+        $commandMap->register("liteauth", new AuthCommand($this, $this->authManager));
+    }
+    
+    private function registerListeners() {
+        $pm = $this->getServer()->getPluginManager();
+        $pm->registerEvents(new JoinListener($this, $this->authManager), $this);
+        $pm->registerEvents(new QuitListener($this, $this->authManager));
+        $pm->registerEvents(new MoveListener($this, $this->authManager));
+        $pm->registerEvents(new InteractListener($this, $this->authManager));
+        $pm->registerEvents(new DamageListener($this, $this->authManager));
+        $pm->registerEvents(new DropListener($this, $this->authManager));
+        $pm->registerEvents(new ChatListener($this, $this->authManager));
+        $pm->registerEvents(new CommandListener($this, $this->authManager));
     }
     
     public function onDisable() {
-        // Сохранение всех данных при выключении
         if ($this->authManager !== null) {
-            $this->authManager->saveAllPlayers();
+            $this->authManager->cleanup();
         }
-        $this->getLogger()->info("[LiteAuth] Плагин выгружен.");
+        $this->getLogger()->info("Plugin disabled.");
     }
     
     public static function getInstance() {
@@ -124,19 +140,32 @@ class LiteAuthPlugin extends PluginBase implements Listener {
         return $this->authManager;
     }
     
-    public function getStorageManager() {
-        return $this->storageManager;
+    public function getConfig() {
+        return $this->config;
     }
     
-    public function getConfigManager() {
-        return $this->configManager;
+    public function getMessages() {
+        return $this->messages;
     }
     
-    public function getMessageManager() {
-        return $this->messageManager;
+    public function getMessage($key, $params = []) {
+        $all = $this->messages->getAll();
+        $message = isset($all[$key]) ? $all[$key] : $key;
+        
+        foreach ($params as $param => $value) {
+            $message = str_replace("{" . $param . "}", $value, $message);
+        }
+        
+        $message = str_replace("{prefix}", "§e§lLITE§f§lAUTH §8┃", $message);
+        $message = str_replace("{password_min}", $this->config->get("min-password-length", 6), $message);
+        $message = str_replace("{password_max}", $this->config->get("max-password-length", 32), $message);
+        
+        return $message;
     }
     
-    public function getPasswordManager() {
-        return $this->passwordManager;
+    public function reloadConfig() {
+        $this->config->reload();
+        $this->messages->reload();
+        $this->validateConfig();
     }
 }
