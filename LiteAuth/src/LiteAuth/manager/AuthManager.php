@@ -265,6 +265,15 @@ class AuthManager {
     }
     
     /**
+     * Алиас для isAuthenticated (для совместимости)
+     * @param Player $player
+     * @return bool
+     */
+    public function isLoggedIn(Player $player) {
+        return $this->isAuthenticated($player);
+    }
+    
+    /**
      * Проверить, зарегистрирован ли игрок (по имени)
      * @param string $playerName
      * @return bool
@@ -1047,7 +1056,6 @@ class AuthManager {
         }
         
         $this->generateCaptcha($target);
-        $this->showCaptcha($target);
         
         $sender->sendMessage("§e§lLITE§f§lAUTH §8┃ §aКапча показана игроку §f{$targetName}§a.");
         $this->logInfo("[ADMIN] {$sender->getName()} показал капчу игроку {$targetName}");

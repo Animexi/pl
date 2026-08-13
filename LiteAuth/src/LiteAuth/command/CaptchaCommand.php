@@ -42,7 +42,7 @@ class CaptchaCommand extends Command implements PluginIdentifiableCommand {
         
         // Если нет аргументов - показать новую капчу
         if (count($args) < 1) {
-            $this->authManager->showCaptcha($sender);
+            $this->authManager->generateCaptcha($sender);
             return true;
         }
         
