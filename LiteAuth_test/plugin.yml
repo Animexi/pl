@@ -1,0 +1,42 @@
+name: LiteAuth
+version: 1.0.0
+api: ["3.0.0"]
+main: LiteAuth\LiteAuthPlugin
+author: LiteAuth Team
+description: Система регистрации и авторизации для Minecraft PE 1.1.5 (LiteCore)
+load: POSTWORLD
+
+permissions:
+  liteauth.admin:
+    description: Полный доступ к административным командам LiteAuth
+    default: op
+  liteauth.reload:
+    description: Перезагрузка конфигурации LiteAuth
+    default: op
+  liteauth.unregister:
+    description: Удаление аккаунтов игроков
+    default: op
+  liteauth.changepassword:
+    description: Смена пароля игроку
+    default: op
+  liteauth.info:
+    description: Просмотр информации об аккаунте
+    default: op
+  liteauth.logout:
+    description: Принудительный выход игрока
+    default: op
+  liteauth.bypass:
+    description: Обход системы авторизации
+    default: op
+  liteauth.captcha:
+    description: Управление капчей
+    default: op
+  liteauth.session:
+    description: Управление сессиями
+    default: op
+  liteauth.register:
+    description: Регистрация нового аккаунта
+    default: true
+  liteauth.login:
+    description: Вход в аккаунт
+    default: true
